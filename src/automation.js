@@ -58,9 +58,8 @@ async function loadCookies(context) {
                 loginType = 'Auto (Cookie)';
             }
             return true;
-        } catch (loginErr) {
-            logger.error('Login failed: ' + loginErr.message);
-            sendWindowsNotification('UMA 每日禮物 - 登入失敗', '自動登入失敗，請檢查帳號密碼設定', 'error');
+        } catch (e) {
+            logger.error('Failed to parse cookies.json: ' + e.message);
             return false;
         }
     }
