@@ -51,12 +51,6 @@ async function loadCookies(context) {
             await context.addCookies(cookies);
             logger.info('Cookies loaded from file.');
             logger.info('Login process completed!');
-            // If cookies were loaded, it means we logged in via cookies.
-            // If loginType is still 'Unknown', set it to 'Auto (Cookie)'.
-            // If it was already set to 'Manual (Password)' (e.g., after a manual login), keep it.
-            if (loginType === 'Unknown') {
-                loginType = 'Auto (Cookie)';
-            }
             return true;
         } catch (e) {
             logger.error('Failed to parse cookies.json: ' + e.message);
@@ -82,6 +76,9 @@ async function run() {
 
     try {
         const cookiesLoaded = await loadCookies(context);
+        if (cookiesLoaded) {
+            loginType = 'Auto (Cookie)';
+        }
 
         // Set a long timeout for potentially manual interactions (CAPTCHA)
         context.setDefaultTimeout(60000);
@@ -462,9 +459,46 @@ async function run() {
             // Look for the check-in button using class .sign-btn
             const signBtns = document.querySelectorAll('.sign-btn');
             let checkInBtn = null;
+            let buttonState = null;
+
             for (const btn of signBtns) {
                 if (btn.offsetWidth > 0 && btn.offsetHeight > 0) {
                     checkInBtn = btn;
+
+                    // Check button state via CSS and attributes
+                    const computedStyle = window.getComputedStyle(btn);
+                    const filter = computedStyle.filter || '';
+                    const pointerEvents = computedStyle.pointerEvents || '';
+                    const opacity = computedStyle.opacity || '1';
+                    const disabled = btn.disabled || btn.hasAttribute('disabled');
+                    const classList = Array.from(btn.classList);
+
+                    // Button is considered "already checked in" if:
+                    // 1. Has grayscale filter
+                    // 2. pointer-events is 'none'
+                    // 3. Is disabled
+                    // 4. Has opacity < 0.5
+                    // 5. Has class 'disabled' or 'dis' or 'inactive'
+                    const isGrayscale = filter.includes('grayscale') && filter.includes('1');
+                    const isNotClickable = pointerEvents === 'none';
+                    const isLowOpacity = parseFloat(opacity) < 0.5;
+                    const hasDisabledClass = classList.some(c =>
+                        c.includes('disabled') || c === 'dis' || c.includes('inactive')
+                    );
+
+                    buttonState = {
+                        filter,
+                        pointerEvents,
+                        opacity,
+                        disabled,
+                        classList: classList.join(' '),
+                        isGrayscale,
+                        isNotClickable,
+                        isLowOpacity,
+                        hasDisabledClass,
+                        isDisabledByStyle: isGrayscale || isNotClickable || isLowOpacity || disabled || hasDisabledClass
+                    };
+
                     break;
                 }
             }
@@ -472,17 +506,37 @@ async function run() {
             return {
                 alreadyCheckedIn,
                 daysChecked,
-                hasCheckInButton: !!checkInBtn
+                hasCheckInButton: !!checkInBtn,
+                buttonState
             };
         });
 
         logger.info(`Check-in Status:`);
-        logger.info(`  - Already checked in: ${checkinStatus.alreadyCheckedIn ? 'YES' : 'NO'}`);
+        logger.info(`  - Text indicates already checked in: ${checkinStatus.alreadyCheckedIn ? 'YES' : 'NO'}`);
         logger.info(`  - Days checked this month: ${checkinStatus.daysChecked !== null ? checkinStatus.daysChecked : 'Unknown'}`);
         logger.info(`  - Check-in button (.sign-btn) visible: ${checkinStatus.hasCheckInButton ? 'YES' : 'NO'}`);
 
-        if (checkinStatus.alreadyCheckedIn && !checkinStatus.hasCheckInButton) {
-            logger.info('✅ Already checked in today! No action needed.');
+        // Log detailed button state if button exists
+        if (checkinStatus.buttonState) {
+            logger.info(`  - Button State Details:`);
+            logger.info(`    • Filter: ${checkinStatus.buttonState.filter || 'none'}`);
+            logger.info(`    • Pointer Events: ${checkinStatus.buttonState.pointerEvents}`);
+            logger.info(`    • Opacity: ${checkinStatus.buttonState.opacity}`);
+            logger.info(`    • Disabled: ${checkinStatus.buttonState.disabled}`);
+            logger.info(`    • Classes: ${checkinStatus.buttonState.classList || 'none'}`);
+            logger.info(`    • Is Grayscale: ${checkinStatus.buttonState.isGrayscale ? 'YES' : 'NO'}`);
+            logger.info(`    • Is Not Clickable: ${checkinStatus.buttonState.isNotClickable ? 'YES' : 'NO'}`);
+            logger.info(`    • Is Low Opacity: ${checkinStatus.buttonState.isLowOpacity ? 'YES' : 'NO'}`);
+            logger.info(`    • Has Disabled Class: ${checkinStatus.buttonState.hasDisabledClass ? 'YES' : 'NO'}`);
+            logger.info(`    • Overall Disabled by Style: ${checkinStatus.buttonState.isDisabledByStyle ? 'YES' : 'NO'}`);
+        }
+
+        // IMPROVED: Check button state first, then text
+        const isAlreadyCheckedIn = checkinStatus.alreadyCheckedIn ||
+            (checkinStatus.buttonState && checkinStatus.buttonState.isDisabledByStyle);
+
+        if (isAlreadyCheckedIn) {
+            logger.info('✅ Already checked in today! (Detected via text or button state)');
             logger.info(`📊 Monthly check-in progress: ${checkinStatus.daysChecked} days`);
             summaryLog.logCheckIn('Already checked in', null, checkinStatus.daysChecked, null);
         } else if (checkinStatus.hasCheckInButton) {
@@ -548,26 +602,99 @@ async function run() {
         logger.info('======================================');
 
         try {
-            // Extract points data from the page
+            // Extract points data from the page using DOM traversal for better accuracy
             const pointsData = await page.evaluate(() => {
                 const bodyText = document.body.innerText;
 
-                // Try to find current year points and expiring points
-                // Common patterns: "本年度積分: 40", "即將過期積分: 20"
-                const currentYearMatch = bodyText.match(/本年度積分[：:]\s*(\d+)/);
-                const expiringMatch = bodyText.match(/即將過期積分[：:]\s*(\d+)/);
+                // Helper to clean non-numeric characters
+                const extractNumber = (str) => {
+                    const match = str.match(/(\d+)/);
+                    return match ? parseInt(match[1]) : null;
+                };
 
-                const currentYear = currentYearMatch ? parseInt(currentYearMatch[1]) : 0;
-                const expiring = expiringMatch ? parseInt(expiringMatch[1]) : 0;
-                const total = currentYear + expiring;
+                // Strategy 1: Find elements containing specific keywords
+                const keywordMap = {
+                    current: ['本年度積分', '今年積分'],
+                    expiring: ['即將過期積分', '即將到期', '過期積分'],
+                    total: ['總積分', '剩餘積分']
+                };
 
-                return { currentYear, expiring, total };
+                let currentYear = null;
+                let expiring = null;
+                let total = null;
+                let debugInfo = [];
+
+                // Find all potential text elements
+                const allElements = document.querySelectorAll('div, span, p, label, li, b, strong');
+
+                for (const el of allElements) {
+                    if (el.offsetWidth === 0 || el.offsetHeight === 0) continue;
+
+                    // Direct text content of this node only (avoiding children text)
+                    const clone = el.cloneNode(true);
+                    Array.from(clone.children).forEach(c => c.remove());
+                    const text = clone.innerText ? clone.innerText.trim() : '';
+
+                    if (!text || text.length > 50) continue;
+
+                    if (text.includes('積分')) {
+                        debugInfo.push(`Found '積分' in <${el.tagName.toLowerCase()}>: "${text}"`);
+                    }
+
+                    // Check for Current Year
+                    if (keywordMap.current.some(k => text.includes(k))) {
+                        const num = extractNumber(text);
+                        if (num !== null) currentYear = num;
+                    }
+
+                    // Check for Expiring
+                    if (keywordMap.expiring.some(k => text.includes(k))) {
+                        const num = extractNumber(text);
+                        if (num !== null) expiring = num;
+                    }
+
+                    // Check for Total
+                    if (keywordMap.total.some(k => text.includes(k))) {
+                        const num = extractNumber(text);
+                        if (num !== null) total = num;
+                    }
+                }
+
+                // Strategy 2: Fallback to regex on Body Text
+                if (currentYear === null || expiring === null) {
+                    const currentYearMatch = bodyText.match(/本年度積分[：:\s]*(\d+)/);
+                    const expiringMatch = bodyText.match(/即將過期積分[：:\s]*(\d+)/);
+
+                    if (currentYear === null && currentYearMatch) currentYear = parseInt(currentYearMatch[1]);
+                    if (expiring === null && expiringMatch) expiring = parseInt(expiringMatch[1]);
+                }
+
+                currentYear = currentYear !== null ? currentYear : 0;
+                expiring = expiring !== null ? expiring : 0;
+
+                if (total === null) {
+                    total = currentYear + expiring;
+                }
+
+                return {
+                    currentYear,
+                    expiring,
+                    total,
+                    debugInfo: debugInfo.slice(0, 15)
+                };
             });
 
             logger.info(`Points Summary:`);
             logger.info(`  - Current year points: ${pointsData.currentYear}`);
             logger.info(`  - Expiring points: ${pointsData.expiring}`);
             logger.info(`  - Total points: ${pointsData.total}`);
+
+            // DEBUG: Log found elements
+            if (pointsData.debugInfo.length > 0) {
+                logger.info(`Debug - Visible Elements with '積分':`);
+                pointsData.debugInfo.forEach(info => logger.info(`  - ${info}`));
+            }
+
             summaryLog.logPoints(pointsData.currentYear, pointsData.expiring, pointsData.total);
 
             if (pointsData.total < 100) {
