@@ -69,13 +69,15 @@ async function run() {
     let loginType = 'Unknown';
     let captchaUsed = false;
 
-    // Launch headless: false so user can see/interact with CAPTCHA
-    const browser = await chromium.launch({ headless: false });
-    const context = await browser.newContext();
+    // Start in headless mode; relaunch headed only if manual intervention is needed
+    let isHeadless = true;
+    let browser = await chromium.launch({ headless: isHeadless });
+    let context = await browser.newContext();
     let page = null;
+    let cookiesLoaded = false;
 
-    try {
-        const cookiesLoaded = await loadCookies(context);
+    const initPage = async () => {
+        cookiesLoaded = await loadCookies(context);
         if (cookiesLoaded) {
             loginType = 'Auto (Cookie)';
         }
@@ -103,31 +105,52 @@ async function run() {
             }
             await page.waitForTimeout(1000);
         }
+    };
 
-        // Check login state
-        // Strategies to detect logged out state:
-        // 1. "登入" text in header is visible.
-        // 2. "Logout" button is missing.
+    const relaunchHeadedForManual = async () => {
+        logger.warn('Manual intervention required. Relaunching browser in headed mode...');
+        try {
+            await browser.close();
+        } catch (e) {
+            logger.warn('Failed to close headless browser cleanly: ' + e.message);
+        }
+        isHeadless = false;
+        browser = await chromium.launch({ headless: false });
+        context = await browser.newContext();
+        await initPage();
+    };
 
-        const headerLoginBtnSelector = '.top-b1';
-        // We check if the header login button actually contains "登入" text.
+    try {
+        await initPage();
 
-        let isLoggedOut = await page.evaluate(() => {
-            const el = document.querySelector('.top-b1');
-            return el && el.innerText.includes('登入');
-        });
+        let loginCompleted = false;
 
-        if (cookiesLoaded && isLoggedOut) {
-            logger.info('Login text visible after cookies load. Re-checking after a short wait...');
-            await page.waitForTimeout(2000);
-            isLoggedOut = await page.evaluate(() => {
+        LOGIN_LOOP:
+        while (!loginCompleted) {
+            // Check login state
+            // Strategies to detect logged out state:
+            // 1. "登入" text in header is visible.
+            // 2. "Logout" button is missing.
+
+            const headerLoginBtnSelector = '.top-b1';
+            // We check if the header login button actually contains "登入" text.
+
+            let isLoggedOut = await page.evaluate(() => {
                 const el = document.querySelector('.top-b1');
                 return el && el.innerText.includes('登入');
             });
-        }
 
-        if (isLoggedOut) {
-            logger.info('Not logged in. Initiating login flow...');
+            if (cookiesLoaded && isLoggedOut) {
+                logger.info('Login text visible after cookies load. Re-checking after a short wait...');
+                await page.waitForTimeout(2000);
+                isLoggedOut = await page.evaluate(() => {
+                    const el = document.querySelector('.top-b1');
+                    return el && el.innerText.includes('登入');
+                });
+            }
+
+            if (isLoggedOut) {
+                logger.info('Not logged in. Initiating login flow...');
 
             // Click Header Login Button
             await page.click(headerLoginBtnSelector);
@@ -377,9 +400,16 @@ async function run() {
             if (!captchaSolved && captchaAttempt >= MAX_CAPTCHA_RETRIES) {
                 const msg = 'CAPTCHA自動識別失敗，請手動輸入驗證碼後繼續';
                 logger.warn('❌ CAPTCHA retry limit reached. Manual intervention required.');
-                logger.warn('Please solve CAPTCHA manually and press Enter to continue...');
                 sendWindowsNotification('UMA 每日禮物 - 需要協助', msg, 'warning');
                 captchaUsed = true;
+
+                if (isHeadless) {
+                    logger.warn('Headless mode detected. Switching to headed browser for manual CAPTCHA input.');
+                    await relaunchHeadedForManual();
+                    continue LOGIN_LOOP;
+                }
+
+                logger.warn('Please solve CAPTCHA manually and press Enter to continue...');
                 await page.waitForTimeout(30000); // Give user 30 seconds
             } else if (captchaSolved) {
                 captchaUsed = true;
@@ -454,10 +484,13 @@ async function run() {
 
             logger.info('Login successful!');
             await saveCookies(context);
+            loginCompleted = true;
 
         } else {
             logger.info('Already logged in.');
             loginType = 'Auto (Cookie)';
+            loginCompleted = true;
+        }
         }
 
         // Give page a moment to settle after login
