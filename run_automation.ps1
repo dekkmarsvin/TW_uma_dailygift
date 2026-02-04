@@ -13,6 +13,15 @@ if (!(Test-Path $LogDir)) {
     New-Item -ItemType Directory -Path $LogDir | Out-Null
 }
 
+# Ensure node_modules is installed
+$NodeModulesPath = Join-Path $ScriptDir "node_modules"
+if (!(Test-Path $NodeModulesPath)) {
+    Write-Host "node_modules not found. Installing dependencies..."
+    Set-Location $ScriptDir
+    npm install
+    npx playwright install
+}
+
 # Log function
 function Write-Log {
     param([string]$Message)

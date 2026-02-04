@@ -86,8 +86,23 @@ async function run() {
         page = await context.newPage();
 
         logger.info(`Navigating to ${config.targetUrl}`);
-        await page.goto(config.targetUrl);
-        await page.waitForLoadState('networkidle');
+        await page.goto(config.targetUrl, { waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('.top-b1', { timeout: 10000 });
+
+        if (cookiesLoaded) {
+            logger.info('Cookies loaded. Waiting for session to be applied...');
+            try {
+                await page.waitForFunction(() => {
+                    const header = document.querySelector('.top-b1');
+                    const headerText = header ? header.innerText.trim() : '';
+                    const hasSignBtn = !!document.querySelector('.sign-btn');
+                    return hasSignBtn || headerText.length > 0;
+                }, null, { timeout: 8000 });
+            } catch (e) {
+                logger.warn('Timed out waiting for session apply. Continuing with header check.');
+            }
+            await page.waitForTimeout(1000);
+        }
 
         // Check login state
         // Strategies to detect logged out state:
@@ -97,10 +112,19 @@ async function run() {
         const headerLoginBtnSelector = '.top-b1';
         // We check if the header login button actually contains "登入" text.
 
-        const isLoggedOut = await page.evaluate(() => {
+        let isLoggedOut = await page.evaluate(() => {
             const el = document.querySelector('.top-b1');
             return el && el.innerText.includes('登入');
         });
+
+        if (cookiesLoaded && isLoggedOut) {
+            logger.info('Login text visible after cookies load. Re-checking after a short wait...');
+            await page.waitForTimeout(2000);
+            isLoggedOut = await page.evaluate(() => {
+                const el = document.querySelector('.top-b1');
+                return el && el.innerText.includes('登入');
+            });
+        }
 
         if (isLoggedOut) {
             logger.info('Not logged in. Initiating login flow...');

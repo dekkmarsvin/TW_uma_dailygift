@@ -32,6 +32,7 @@ cd TW_uma_dailygift
 
 ```bash
 npm install
+npx playwright install
 ```
 
 ### 3. 設定環境變數
