@@ -152,345 +152,345 @@ async function run() {
             if (isLoggedOut) {
                 logger.info('Not logged in. Initiating login flow...');
 
-            // Click Header Login Button
-            await page.click(headerLoginBtnSelector);
+                // Click Header Login Button
+                await page.click(headerLoginBtnSelector);
 
-            // Wait for popup to animate in
-            logger.info('Waiting for login popup...');
-            await page.waitForSelector('.login-box', { timeout: 10000 });
-            await page.waitForTimeout(1000); // Animation wait
+                // Wait for popup to animate in
+                logger.info('Waiting for login popup...');
+                await page.waitForSelector('.login-box', { timeout: 10000 });
+                await page.waitForTimeout(1000); // Animation wait
 
-            // SWITCH TO ACCOUNT/PASSWORD MODE
-            // The default might be verification code. We need to click "帳號密碼".
-            const accountModeBtnSelector = '.login-box .other-login';
-            try {
-                // Check if button exists and has text "帳號密碼"
-                const switchBtn = page.locator(accountModeBtnSelector).filter({ hasText: '帳號密碼' });
-                if (await switchBtn.isVisible()) {
-                    logger.info('Switching to Account/Password login mode...');
-                    await switchBtn.click();
-                    await page.waitForTimeout(1000); // Wait for input switch
-                } else {
-                    logger.info('Switch button "帳號密碼" not visible. Assuming correct mode or different UI.');
-                }
-            } catch (e) {
-                logger.warn('Error trying to switch login mode: ' + e.message);
-            }
-
-            // Click "User Agreement" checkbox FIRST (before filling credentials)
-            // This ensures the login button becomes clickable
-            try {
-                logger.info('Clicking "User Agreement" checkbox...');
-
-                // Find the VISIBLE checkbox by looking for the privacy text
-                const wasChecked = await page.evaluate(() => {
-                    // Strategy: Find all visible radio-boxes in the login box
-                    const loginBox = document.querySelector('.login-box');
-                    if (!loginBox) return null;
-
-                    const radioBoxes = Array.from(loginBox.querySelectorAll('.radio-box'));
-
-                    // Find the one associated with privacy policy
-                    // It should be near text containing "使用者協議" or "隱私權政策"
-                    for (const box of radioBoxes) {
-                        // Check if this radio-box is visible
-                        if (box.offsetWidth === 0 || box.offsetHeight === 0) continue;
-
-                        // Check parent or sibling elements for privacy-related text
-                        const parent = box.parentElement;
-                        if (parent && parent.innerText) {
-                            const text = parent.innerText;
-                            if (text.includes('使用者協議') || text.includes('隱私權政策')) {
-                                // Found it! Check if already checked
-                                if (box.classList.contains('active') || box.classList.contains('checked')) {
-                                    return true;
-                                }
-                                // Click it
-                                box.click();
-                                return false;
-                            }
-                        }
+                // SWITCH TO ACCOUNT/PASSWORD MODE
+                // The default might be verification code. We need to click "帳號密碼".
+                const accountModeBtnSelector = '.login-box .other-login';
+                try {
+                    // Check if button exists and has text "帳號密碼"
+                    const switchBtn = page.locator(accountModeBtnSelector).filter({ hasText: '帳號密碼' });
+                    if (await switchBtn.isVisible()) {
+                        logger.info('Switching to Account/Password login mode...');
+                        await switchBtn.click();
+                        await page.waitForTimeout(1000); // Wait for input switch
+                    } else {
+                        logger.info('Switch button "帳號密碼" not visible. Assuming correct mode or different UI.');
                     }
+                } catch (e) {
+                    logger.warn('Error trying to switch login mode: ' + e.message);
+                }
 
-                    return null;
-                });
+                // Click "User Agreement" checkbox FIRST (before filling credentials)
+                // This ensures the login button becomes clickable
+                try {
+                    logger.info('Clicking "User Agreement" checkbox...');
 
-                if (wasChecked === true) {
-                    logger.info('User Agreement was already checked.');
-                } else if (wasChecked === false) {
-                    logger.info('✅ Clicked User Agreement checkbox via JS.');
-                    await page.waitForTimeout(500);
-                } else {
-                    logger.warn('User Agreement checkbox element not found via JS query. Attempting fallback...');
-                    // Fallback: Try clicking the visible privacy line directly
-                    try {
-                        await page.evaluate(() => {
-                            const privacyLines = Array.from(document.querySelectorAll('.tip-line'));
-                            for (const line of privacyLines) {
-                                if (line.offsetWidth > 0 && line.offsetHeight > 0 &&
-                                    (line.innerText.includes('使用者協議') || line.innerText.includes('隱私權政策'))) {
-                                    const radioBox = line.querySelector('.radio-box');
-                                    if (radioBox) {
-                                        radioBox.click();
+                    // Find the VISIBLE checkbox by looking for the privacy text
+                    const wasChecked = await page.evaluate(() => {
+                        // Strategy: Find all visible radio-boxes in the login box
+                        const loginBox = document.querySelector('.login-box');
+                        if (!loginBox) return null;
+
+                        const radioBoxes = Array.from(loginBox.querySelectorAll('.radio-box'));
+
+                        // Find the one associated with privacy policy
+                        // It should be near text containing "使用者協議" or "隱私權政策"
+                        for (const box of radioBoxes) {
+                            // Check if this radio-box is visible
+                            if (box.offsetWidth === 0 || box.offsetHeight === 0) continue;
+
+                            // Check parent or sibling elements for privacy-related text
+                            const parent = box.parentElement;
+                            if (parent && parent.innerText) {
+                                const text = parent.innerText;
+                                if (text.includes('使用者協議') || text.includes('隱私權政策')) {
+                                    // Found it! Check if already checked
+                                    if (box.classList.contains('active') || box.classList.contains('checked')) {
                                         return true;
                                     }
+                                    // Click it
+                                    box.click();
+                                    return false;
                                 }
                             }
-                            return false;
-                        });
-                        logger.info('✅ Clicked User Agreement checkbox via fallback.');
+                        }
+
+                        return null;
+                    });
+
+                    if (wasChecked === true) {
+                        logger.info('User Agreement was already checked.');
+                    } else if (wasChecked === false) {
+                        logger.info('✅ Clicked User Agreement checkbox via JS.');
                         await page.waitForTimeout(500);
-                    } catch (e) {
-                        logger.error('Fallback also failed: ' + e.message);
+                    } else {
+                        logger.warn('User Agreement checkbox element not found via JS query. Attempting fallback...');
+                        // Fallback: Try clicking the visible privacy line directly
+                        try {
+                            await page.evaluate(() => {
+                                const privacyLines = Array.from(document.querySelectorAll('.tip-line'));
+                                for (const line of privacyLines) {
+                                    if (line.offsetWidth > 0 && line.offsetHeight > 0 &&
+                                        (line.innerText.includes('使用者協議') || line.innerText.includes('隱私權政策'))) {
+                                        const radioBox = line.querySelector('.radio-box');
+                                        if (radioBox) {
+                                            radioBox.click();
+                                            return true;
+                                        }
+                                    }
+                                }
+                                return false;
+                            });
+                            logger.info('✅ Clicked User Agreement checkbox via fallback.');
+                            await page.waitForTimeout(500);
+                        } catch (e) {
+                            logger.error('Fallback also failed: ' + e.message);
+                        }
                     }
+
+                } catch (e) {
+                    logger.warn('Could not click User Agreement checkbox: ' + e.message);
                 }
 
-            } catch (e) {
-                logger.warn('Could not click User Agreement checkbox: ' + e.message);
-            }
+                // Fill Credentials AFTER checking agreement
+                const usernameSelector = 'input[placeholder*="信箱"]';
+                const passwordSelector = 'input[placeholder="請輸入密碼"]';
 
-            // Fill Credentials AFTER checking agreement
-            const usernameSelector = 'input[placeholder*="信箱"]';
-            const passwordSelector = 'input[placeholder="請輸入密碼"]';
+                logger.info('Filling credentials...');
 
-            logger.info('Filling credentials...');
-
-            // Wait for password field to verify we are in the correct mode
-            try {
-                await page.waitForSelector(passwordSelector, { timeout: 3000 });
-            } catch (e) {
-                logger.warn('Password field not immediately found. Retrying mode switch or filling anyway...');
-            }
-
-            // Fill username
-            const usernameInput = page.locator(usernameSelector).first();
-            await usernameInput.fill(config.username);
-            logger.info('✅ Username filled.');
-
-            // Fill password
-            const passwordInput = page.locator(passwordSelector).first();
-            await passwordInput.fill(config.password);
-            logger.info('✅ Password filled.');
-
-            // CAPTCHA HANDLING WITH RETRY MECHANISM
-            const MAX_CAPTCHA_RETRIES = 3;
-            let captchaAttempt = 0;
-            let captchaSolved = false;
-
-            while (captchaAttempt < MAX_CAPTCHA_RETRIES && !captchaSolved) {
+                // Wait for password field to verify we are in the correct mode
                 try {
-                    captchaAttempt++;
-                    logger.info(`CAPTCHA attempt ${captchaAttempt}/${MAX_CAPTCHA_RETRIES}...`);
+                    await page.waitForSelector(passwordSelector, { timeout: 3000 });
+                } catch (e) {
+                    logger.warn('Password field not immediately found. Retrying mode switch or filling anyway...');
+                }
 
-                    const captchaImageSelector = '.modal-code img';
-                    const captchaInputSelector = 'input[placeholder="請輸入驗證碼"]';
+                // Fill username
+                const usernameInput = page.locator(usernameSelector).first();
+                await usernameInput.fill(config.username);
+                logger.info('✅ Username filled.');
 
-                    if (await page.isVisible(captchaImageSelector)) {
-                        logger.info('CAPTCHA found. Attempting to solve with AI...');
+                // Fill password
+                const passwordInput = page.locator(passwordSelector).first();
+                await passwordInput.fill(config.password);
+                logger.info('✅ Password filled.');
 
-                        // Capture CAPTCHA screenshot
-                        const captchaElement = await page.locator(captchaImageSelector).first();
-                        const buffer = await captchaElement.screenshot();
-                        const base64Image = buffer.toString('base64');
+                // CAPTCHA HANDLING WITH RETRY MECHANISM
+                const MAX_CAPTCHA_RETRIES = 3;
+                let captchaAttempt = 0;
+                let captchaSolved = false;
 
-                        // Initialize Gemini (New SDK @google/genai)
-                        const { GoogleGenAI } = require('@google/genai');
-                        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+                while (captchaAttempt < MAX_CAPTCHA_RETRIES && !captchaSolved) {
+                    try {
+                        captchaAttempt++;
+                        logger.info(`CAPTCHA attempt ${captchaAttempt}/${MAX_CAPTCHA_RETRIES}...`);
 
-                        // Use model from env or fall back to default
-                        const modelName = process.env.model || "gemini-3-flash-preview";
+                        const captchaImageSelector = '.modal-code img';
+                        const captchaInputSelector = 'input[placeholder="請輸入驗證碼"]';
 
-                        logger.info(`Using Gemini Model: ${modelName}`);
+                        if (await page.isVisible(captchaImageSelector)) {
+                            logger.info('CAPTCHA found. Attempting to solve with AI...');
 
-                        const result = await ai.models.generateContent({
-                            model: modelName,
-                            contents: [
-                                {
-                                    inlineData: {
-                                        mimeType: "image/png",
-                                        data: base64Image
+                            // Capture CAPTCHA screenshot
+                            const captchaElement = await page.locator(captchaImageSelector).first();
+                            const buffer = await captchaElement.screenshot();
+                            const base64Image = buffer.toString('base64');
+
+                            // Initialize Gemini (New SDK @google/genai)
+                            const { GoogleGenAI } = require('@google/genai');
+                            const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+                            // Use model from env or fall back to default
+                            const modelName = process.env.model || "gemini-3-flash-preview";
+
+                            logger.info(`Using Gemini Model: ${modelName}`);
+
+                            const result = await ai.models.generateContent({
+                                model: modelName,
+                                contents: [
+                                    {
+                                        inlineData: {
+                                            mimeType: "image/png",
+                                            data: base64Image
+                                        }
+                                    },
+                                    { text: "Return ONLY the alphanumeric verification code you see in this image. Do not include spaces or other text." }
+                                ]
+                            });
+
+                            let text = '';
+                            if (typeof result.text === 'function') {
+                                text = result.text();
+                            } else if (result.response && typeof result.response.text === 'function') {
+                                text = result.response.text();
+                            } else if (result.text) {
+                                text = result.text;
+                            }
+                            const code = text ? text.trim().replace(/\s/g, '') : '';
+                            logger.info(`AI Solved CAPTCHA: ${code}`);
+
+                            if (code) {
+                                // Clear previous input and fill new code
+                                await page.fill(captchaInputSelector, '');
+                                await page.fill(captchaInputSelector, code);
+                                logger.info('CAPTCHA code filled. Verifying...');
+
+                                // Wait briefly for validation
+                                await page.waitForTimeout(1000);
+
+                                // Check if login button becomes clickable (indicates CAPTCHA success)
+                                try {
+                                    await page.waitForFunction(() => {
+                                        const loginBtn = Array.from(document.querySelectorAll('.login-box .login-btn'))
+                                            .find(b => b.innerText.trim() === '登入');
+                                        if (loginBtn) {
+                                            const pointerEvents = window.getComputedStyle(loginBtn).pointerEvents;
+                                            return pointerEvents !== 'none';
+                                        }
+                                        return false;
+                                    }, null, { timeout: 3000 });
+
+                                    logger.info(`✅ CAPTCHA solved successfully on attempt ${captchaAttempt}!`);
+                                    captchaSolved = true;
+                                    break;
+                                } catch (e) {
+                                    logger.warn(`⚠️ CAPTCHA attempt ${captchaAttempt} failed - button not clickable`);
+
+                                    if (captchaAttempt < MAX_CAPTCHA_RETRIES) {
+                                        // Try to refresh CAPTCHA if refresh button exists
+                                        try {
+                                            const refreshBtn = await page.locator('.modal-code .refresh, .modal-code .icon-refresh').first();
+                                            if (await refreshBtn.isVisible({ timeout: 1000 })) {
+                                                await refreshBtn.click();
+                                                logger.info('Refreshed CAPTCHA image');
+                                            }
+                                        } catch (refreshErr) {
+                                            // No refresh button or click failed, continue anyway
+                                        }
+
+                                        // Exponential backoff: 1s, 2s, 4s
+                                        const waitTime = Math.pow(2, captchaAttempt - 1) * 1000;
+                                        logger.info(`Waiting ${waitTime}ms before retry...`);
+                                        await page.waitForTimeout(waitTime);
                                     }
-                                },
-                                { text: "Return ONLY the alphanumeric verification code you see in this image. Do not include spaces or other text." }
-                            ]
-                        });
-
-                        let text = '';
-                        if (typeof result.text === 'function') {
-                            text = result.text();
-                        } else if (result.response && typeof result.response.text === 'function') {
-                            text = result.response.text();
-                        } else if (result.text) {
-                            text = result.text;
-                        }
-                        const code = text ? text.trim().replace(/\s/g, '') : '';
-                        logger.info(`AI Solved CAPTCHA: ${code}`);
-
-                        if (code) {
-                            // Clear previous input and fill new code
-                            await page.fill(captchaInputSelector, '');
-                            await page.fill(captchaInputSelector, code);
-                            logger.info('CAPTCHA code filled. Verifying...');
-
-                            // Wait briefly for validation
-                            await page.waitForTimeout(1000);
-
-                            // Check if login button becomes clickable (indicates CAPTCHA success)
-                            try {
-                                await page.waitForFunction(() => {
-                                    const loginBtn = Array.from(document.querySelectorAll('.login-box .login-btn'))
-                                        .find(b => b.innerText.trim() === '登入');
-                                    if (loginBtn) {
-                                        const pointerEvents = window.getComputedStyle(loginBtn).pointerEvents;
-                                        return pointerEvents !== 'none';
-                                    }
-                                    return false;
-                                }, null, { timeout: 3000 });
-
-                                logger.info(`✅ CAPTCHA solved successfully on attempt ${captchaAttempt}!`);
-                                captchaSolved = true;
-                                break;
-                            } catch (e) {
-                                logger.warn(`⚠️ CAPTCHA attempt ${captchaAttempt} failed - button not clickable`);
+                                }
+                            } else {
+                                logger.warn(`No CAPTCHA code extracted on attempt ${captchaAttempt}`);
 
                                 if (captchaAttempt < MAX_CAPTCHA_RETRIES) {
-                                    // Try to refresh CAPTCHA if refresh button exists
-                                    try {
-                                        const refreshBtn = await page.locator('.modal-code .refresh, .modal-code .icon-refresh').first();
-                                        if (await refreshBtn.isVisible({ timeout: 1000 })) {
-                                            await refreshBtn.click();
-                                            logger.info('Refreshed CAPTCHA image');
-                                        }
-                                    } catch (refreshErr) {
-                                        // No refresh button or click failed, continue anyway
-                                    }
-
-                                    // Exponential backoff: 1s, 2s, 4s
                                     const waitTime = Math.pow(2, captchaAttempt - 1) * 1000;
-                                    logger.info(`Waiting ${waitTime}ms before retry...`);
                                     await page.waitForTimeout(waitTime);
                                 }
                             }
                         } else {
-                            logger.warn(`No CAPTCHA code extracted on attempt ${captchaAttempt}`);
-
-                            if (captchaAttempt < MAX_CAPTCHA_RETRIES) {
-                                const waitTime = Math.pow(2, captchaAttempt - 1) * 1000;
-                                await page.waitForTimeout(waitTime);
-                            }
+                            logger.info('No CAPTCHA image visible. Skipping...');
+                            captchaSolved = true; // No CAPTCHA needed
+                            break;
                         }
-                    } else {
-                        logger.info('No CAPTCHA image visible. Skipping...');
-                        captchaSolved = true; // No CAPTCHA needed
-                        break;
-                    }
-                } catch (err) {
-                    logger.error(`CAPTCHA attempt ${captchaAttempt} error: ${err.message}`);
-                    if (err.message.includes('not supported') || err.message.includes('404')) {
-                        logger.warn('Model might be invalid. Please check .env for "model" variable.');
-                    }
+                    } catch (err) {
+                        logger.error(`CAPTCHA attempt ${captchaAttempt} error: ${err.message}`);
+                        if (err.message.includes('not supported') || err.message.includes('404')) {
+                            logger.warn('Model might be invalid. Please check .env for "model" variable.');
+                        }
 
-                    if (captchaAttempt < MAX_CAPTCHA_RETRIES) {
-                        const waitTime = Math.pow(2, captchaAttempt - 1) * 1000;
-                        await page.waitForTimeout(waitTime);
+                        if (captchaAttempt < MAX_CAPTCHA_RETRIES) {
+                            const waitTime = Math.pow(2, captchaAttempt - 1) * 1000;
+                            await page.waitForTimeout(waitTime);
+                        }
                     }
                 }
-            }
 
-            if (!captchaSolved && captchaAttempt >= MAX_CAPTCHA_RETRIES) {
-                const msg = 'CAPTCHA自動識別失敗，請手動輸入驗證碼後繼續';
-                logger.warn('❌ CAPTCHA retry limit reached. Manual intervention required.');
-                sendWindowsNotification('UMA 每日禮物 - 需要協助', msg, 'warning');
-                captchaUsed = true;
+                if (!captchaSolved && captchaAttempt >= MAX_CAPTCHA_RETRIES) {
+                    const msg = 'CAPTCHA自動識別失敗，請手動輸入驗證碼後繼續';
+                    logger.warn('❌ CAPTCHA retry limit reached. Manual intervention required.');
+                    sendWindowsNotification('UMA 每日禮物 - 需要協助', msg, 'warning');
+                    captchaUsed = true;
 
-                if (isHeadless) {
-                    logger.warn('Headless mode detected. Switching to headed browser for manual CAPTCHA input.');
-                    await relaunchHeadedForManual();
-                    continue LOGIN_LOOP;
+                    if (isHeadless) {
+                        logger.warn('Headless mode detected. Switching to headed browser for manual CAPTCHA input.');
+                        await relaunchHeadedForManual();
+                        continue LOGIN_LOOP;
+                    }
+
+                    logger.warn('Please solve CAPTCHA manually and press Enter to continue...');
+                    await page.waitForTimeout(30000); // Give user 30 seconds
+                } else if (captchaSolved) {
+                    captchaUsed = true;
+                }
+                loginType = 'Manual (Password)';
+
+
+                // Click Login Submit
+                logger.info('Attempting to click Submit Login button...');
+
+                // First, check if the button is clickable
+                const buttonState = await page.evaluate(() => {
+                    const btn = Array.from(document.querySelectorAll('.login-box .login-btn'))
+                        .find(b => b.innerText.trim() === '登入');
+                    if (btn) {
+                        const pointerEvents = window.getComputedStyle(btn).pointerEvents;
+                        const disabled = btn.disabled || btn.classList.contains('disabled') || btn.classList.contains('dis');
+                        return {
+                            found: true,
+                            clickable: pointerEvents !== 'none' && !disabled,
+                            pointerEvents: pointerEvents,
+                            disabled: disabled
+                        };
+                    }
+                    return { found: false };
+                });
+
+                logger.info(`Button state: ${JSON.stringify(buttonState)}`);
+
+                if (!buttonState.found) {
+                    logger.error('❌ Login button not found!');
+                    throw new Error('Login button not found');
                 }
 
-                logger.warn('Please solve CAPTCHA manually and press Enter to continue...');
-                await page.waitForTimeout(30000); // Give user 30 seconds
-            } else if (captchaSolved) {
-                captchaUsed = true;
-            }
-            loginType = 'Manual (Password)';
-
-
-            // Click Login Submit
-            logger.info('Attempting to click Submit Login button...');
-
-            // First, check if the button is clickable
-            const buttonState = await page.evaluate(() => {
-                const btn = Array.from(document.querySelectorAll('.login-box .login-btn'))
-                    .find(b => b.innerText.trim() === '登入');
-                if (btn) {
-                    const pointerEvents = window.getComputedStyle(btn).pointerEvents;
-                    const disabled = btn.disabled || btn.classList.contains('disabled') || btn.classList.contains('dis');
-                    return {
-                        found: true,
-                        clickable: pointerEvents !== 'none' && !disabled,
-                        pointerEvents: pointerEvents,
-                        disabled: disabled
-                    };
+                if (!buttonState.clickable) {
+                    logger.warn('⚠️ Login button is not clickable. Possible reasons:');
+                    logger.warn(`  - Pointer events: ${buttonState.pointerEvents}`);
+                    logger.warn(`  - Disabled: ${buttonState.disabled}`);
+                    logger.warn('This usually means CAPTCHA is incorrect or form validation failed.');
+                    logger.warn('Waiting 10 seconds for manual intervention...');
+                    await page.waitForTimeout(10000);
                 }
-                return { found: false };
-            });
 
-            logger.info(`Button state: ${JSON.stringify(buttonState)}`);
+                // Try to click the button using evaluate (JS click)
+                const loginClicked = await page.evaluate((selector) => {
+                    const btns = Array.from(document.querySelectorAll(selector));
+                    // Filter for button that contains "Login" text exactly or close to it
+                    const target = btns.find(b => b.innerText.trim() === '登入');
+                    if (target) {
+                        target.click();
+                        return true;
+                    }
+                    return false;
+                }, '.login-box .login-btn');
 
-            if (!buttonState.found) {
-                logger.error('❌ Login button not found!');
-                throw new Error('Login button not found');
-            }
-
-            if (!buttonState.clickable) {
-                logger.warn('⚠️ Login button is not clickable. Possible reasons:');
-                logger.warn(`  - Pointer events: ${buttonState.pointerEvents}`);
-                logger.warn(`  - Disabled: ${buttonState.disabled}`);
-                logger.warn('This usually means CAPTCHA is incorrect or form validation failed.');
-                logger.warn('Waiting 10 seconds for manual intervention...');
-                await page.waitForTimeout(10000);
-            }
-
-            // Try to click the button using evaluate (JS click)
-            const loginClicked = await page.evaluate((selector) => {
-                const btns = Array.from(document.querySelectorAll(selector));
-                // Filter for button that contains "Login" text exactly or close to it
-                const target = btns.find(b => b.innerText.trim() === '登入');
-                if (target) {
-                    target.click();
-                    return true;
+                if (loginClicked) {
+                    logger.info('✅ Login button clicked via JS.');
+                } else {
+                    logger.warn('Could not find Login button via JS. Attempting Playwright fallback...');
+                    const submitLoginBtn = page.locator('.login-box .login-btn').filter({ hasText: /^登入$/ }).first();
+                    await submitLoginBtn.click({ force: true });
                 }
-                return false;
-            }, '.login-box .login-btn');
 
-            if (loginClicked) {
-                logger.info('✅ Login button clicked via JS.');
+                // Wait for login to complete (Login button in header changes or disappears)
+                logger.info('WAITING FOR LOGIN TO COMPLETE...');
+                logger.info('>>> PLEASE SOLVE CAPTCHA MANUALLY IF PROMPTED <<<');
+
+                await page.waitForFunction(() => {
+                    const el = document.querySelector('.top-b1');
+                    return !el || !el.innerText.includes('登入');
+                }, null, { timeout: 120000 }); // 2 minute timeout
+
+                logger.info('Login successful!');
+                await saveCookies(context);
+                loginCompleted = true;
+
             } else {
-                logger.warn('Could not find Login button via JS. Attempting Playwright fallback...');
-                const submitLoginBtn = page.locator('.login-box .login-btn').filter({ hasText: /^登入$/ }).first();
-                await submitLoginBtn.click({ force: true });
+                logger.info('Already logged in.');
+                loginType = 'Auto (Cookie)';
+                loginCompleted = true;
             }
-
-            // Wait for login to complete (Login button in header changes or disappears)
-            logger.info('WAITING FOR LOGIN TO COMPLETE...');
-            logger.info('>>> PLEASE SOLVE CAPTCHA MANUALLY IF PROMPTED <<<');
-
-            await page.waitForFunction(() => {
-                const el = document.querySelector('.top-b1');
-                return !el || !el.innerText.includes('登入');
-            }, null, { timeout: 120000 }); // 2 minute timeout
-
-            logger.info('Login successful!');
-            await saveCookies(context);
-            loginCompleted = true;
-
-        } else {
-            logger.info('Already logged in.');
-            loginType = 'Auto (Cookie)';
-            loginCompleted = true;
-        }
         }
 
         // Give page a moment to settle after login
@@ -588,12 +588,11 @@ async function run() {
             logger.info(`    • Overall Disabled by Style: ${checkinStatus.buttonState.isDisabledByStyle ? 'YES' : 'NO'}`);
         }
 
-        // IMPROVED: Check button state first, then text
-        const isAlreadyCheckedIn = checkinStatus.alreadyCheckedIn ||
-            (checkinStatus.buttonState && checkinStatus.buttonState.isDisabledByStyle);
+        // IMPROVED: Check button state ONLY (User request: 移除文字內容檢測，僅判斷按鈕狀態)
+        const isAlreadyCheckedIn = checkinStatus.buttonState && checkinStatus.buttonState.isDisabledByStyle;
 
         if (isAlreadyCheckedIn) {
-            logger.info('✅ Already checked in today! (Detected via text or button state)');
+            logger.info('✅ Already checked in today! (Detected via button state)');
             logger.info(`📊 Monthly check-in progress: ${checkinStatus.daysChecked} days`);
             summaryLog.logCheckIn('Already checked in', null, checkinStatus.daysChecked, null);
         } else if (checkinStatus.hasCheckInButton) {
