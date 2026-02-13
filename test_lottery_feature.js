@@ -70,14 +70,21 @@ async function testLotteryFeature() {
 
             for (const el of stockElements) {
                 const text = el.innerText || el.textContent || '';
-                const stockMatch = text.match(/剩餘[：:]\s*(\d+)/);
+                const stockMatch = text.match(/剩餘[：:]?\s*(\d+)/);
 
                 if (stockMatch) {
                     const remaining = parseInt(stockMatch[1]);
                     prizes.push({
-                        name: text.split(/剩餘[：:]/)[0].trim(),
+                        name: text.split(/剩餘/)[0].trim(),
                         remaining: remaining,
                         hasStock: remaining > 0,
+                        rawText: text
+                    });
+                } else if (text.includes('已抽完')) {
+                    prizes.push({
+                        name: text.split(/已抽完/)[0].trim(),
+                        remaining: 0,
+                        hasStock: false,
                         rawText: text
                     });
                 }

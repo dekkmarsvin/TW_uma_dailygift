@@ -173,7 +173,7 @@ This document provides detailed input/output specifications for all functions in
     prizes: [
         {
             name: string,       // Prize name
-            remaining: number,  // Stock count
+            remaining: number,  // Stock count (0 if sold out)
             hasStock: boolean   // remaining > 0
         },
         ...
@@ -182,8 +182,9 @@ This document provides detailed input/output specifications for all functions in
 }
 ```
 
-**Regex Pattern**:
-- Stock count: `/剩餘[：:]\s*(\d+)/`
+**Regex Patterns**:
+- Stock count: `/剩餘[：:]?\s*(\d+)/` — matches `剩餘1份`, `剩餘: 10`, `剩餘：5`
+- Sold out detection: `text.includes('已抽完')` — marks prize as remaining=0
 
 ---
 
@@ -201,12 +202,17 @@ This document provides detailed input/output specifications for all functions in
 
 **Output**:
 - `lotteryClicked` (boolean)
-- `lotteryResult` (string) - Result message or "Lottery drawn - check manually for result"
+- `resultMsg` (string) - User's own result, or fallback message
 
-**Result Patterns** (regex):
-- `/恭喜.*?獲得.*?(.+)/`
-- `/抽中.*?(.+)/`
-- `/獲得.*?(.+)/`
+**Result Extraction Strategy**:
+1. **Primary**: Hide marquee (`.points-left-title`) → read `body.innerText` → restore marquee
+2. **Fallback**: Click 中獎記錄 (`.points-reward-log`) → read prize history modal
+3. **Last resort**: `'Lottery drawn - check manually for result'`
+
+**Result Patterns** (non-greedy to capture single result):
+- `/恭喜.*?獲得.*?【(.+?)】/`
+- `/抽中了【(.+?)】/`
+- `/獲得.*?【(.+?)】/`
 
 **Side Effects**:
 - Screenshots result to `logs/lottery_result.png`
@@ -318,4 +324,4 @@ YYYY-MM-DD HH:mm:ss <level>: <message>
 
 ---
 
-*Last Updated: 2026-02-04*
+*Last Updated: 2026-02-13*

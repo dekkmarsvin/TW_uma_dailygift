@@ -766,15 +766,22 @@ async function run() {
 
                     for (const el of stockElements) {
                         const text = el.innerText || el.textContent || '';
-                        // Look for patterns like "剩餘: 10", "剩餘：5"
-                        const stockMatch = text.match(/剩餘[：:]\s*(\d+)/);
+                        // Look for patterns like "剩餘1份", "剩餘: 10", "剩餘：5"
+                        const stockMatch = text.match(/剩餘[：:]?\s*(\d+)/);
 
                         if (stockMatch) {
                             const remaining = parseInt(stockMatch[1]);
                             prizes.push({
-                                name: text.split(/剩餘[：:]/)[0].trim(),
+                                name: text.split(/剩餘/)[0].trim(),
                                 remaining: remaining,
                                 hasStock: remaining > 0
+                            });
+                        } else if (text.includes('已抽完')) {
+                            // Prize is sold out
+                            prizes.push({
+                                name: text.split(/已抽完/)[0].trim(),
+                                remaining: 0,
+                                hasStock: false
                             });
                         }
                     }
@@ -815,14 +822,20 @@ async function run() {
 
                         // Try to capture the result from modal/popup
                         const lotteryResult = await page.evaluate(() => {
+                            // Hide the marquee (.points-left-title) to exclude other users' records
+                            const marquee = document.querySelector('.points-left-title');
+                            if (marquee) marquee.style.display = 'none';
+
+                            // Try to find result patterns from the page (excluding marquee)
                             const bodyText = document.body.innerText;
 
-                            // Try to find result patterns
-                            // Look for success messages or prize names
+                            // Restore marquee
+                            if (marquee) marquee.style.display = '';
+
                             const resultPatterns = [
-                                /恭喜.*?獲得.*?(.+)/,
-                                /抽中.*?(.+)/,
-                                /獲得.*?(.+)/
+                                /恭喜.*?獲得.*?【(.+?)】/,
+                                /抽中了【(.+?)】/,
+                                /獲得.*?【(.+?)】/
                             ];
 
                             for (const pattern of resultPatterns) {
@@ -832,12 +845,34 @@ async function run() {
                                 }
                             }
 
-                            // If no specific pattern, just note that lottery was drawn
-                            return 'Lottery drawn - check manually for result';
+                            return null;
                         });
 
-                        logger.info(`🎁 Lottery Result: ${lotteryResult}`);
-                        summaryLog.logLottery('Success', lotteryResult);
+                        // Fallback: click 中獎記錄 to get user's own prize history
+                        let finalResult = lotteryResult;
+                        if (!finalResult) {
+                            try {
+                                const historyBtn = page.locator('.points-reward-log');
+                                if (await historyBtn.isVisible()) {
+                                    await historyBtn.click();
+                                    await page.waitForTimeout(1000);
+                                    // Read the first entry from prize history modal
+                                    finalResult = await page.evaluate(() => {
+                                        // Look for the newest history entry in any visible modal/popup
+                                        const visibleText = document.body.innerText;
+                                        const historyMatch = visibleText.match(/抽中了【(.+?)】/);
+                                        return historyMatch ? historyMatch[0] : null;
+                                    });
+                                }
+                            } catch (e) {
+                                // Ignore history button errors
+                            }
+                        }
+
+                        const resultMsg = finalResult || 'Lottery drawn - check manually for result';
+
+                        logger.info(`🎁 Lottery Result: ${resultMsg}`);
+                        summaryLog.logLottery('Success', resultMsg);
 
                         // Take screenshot of result
                         try {
