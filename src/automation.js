@@ -60,6 +60,238 @@ async function loadCookies(context) {
     return false;
 }
 
+async function closeRewardPopupIfVisible(page) {
+    const clickedClose = await page.evaluate(() => {
+        const isVisible = (el) => {
+            const rect = el.getBoundingClientRect();
+            const style = window.getComputedStyle(el);
+            return rect.width > 0 &&
+                rect.height > 0 &&
+                style.visibility !== 'hidden' &&
+                style.display !== 'none' &&
+                style.opacity !== '0';
+        };
+
+        const dialogs = Array.from(document.querySelectorAll('div, section, article'))
+            .filter(el => {
+                if (!isVisible(el)) return false;
+                const rect = el.getBoundingClientRect();
+                const text = el.innerText || '';
+                return /簽到成功|恭喜獲得/.test(text) &&
+                    rect.width >= 250 &&
+                    rect.width <= Math.min(window.innerWidth * 0.9, 900) &&
+                    rect.height >= 120 &&
+                    rect.height <= Math.min(window.innerHeight * 0.8, 700);
+            })
+            .sort((a, b) => {
+                const ar = a.getBoundingClientRect();
+                const br = b.getBoundingClientRect();
+                return (ar.width * ar.height) - (br.width * br.height);
+            });
+
+        const dialog = dialogs[0];
+        if (!dialog) {
+            return false;
+        }
+
+        const closeCandidates = Array.from(dialog.querySelectorAll(
+            '[class*="close"], [aria-label*="close"], [aria-label*="關閉"], button, img, div, span'
+        ));
+
+        for (const el of closeCandidates) {
+            if (!isVisible(el)) continue;
+
+            const text = (el.innerText || el.textContent || el.getAttribute('alt') || el.getAttribute('title') || '').trim();
+            const className = typeof el.className === 'string' ? el.className : '';
+            const ariaLabel = el.getAttribute('aria-label') || '';
+            const looksLikeClose = className.toLowerCase().includes('close') ||
+                ariaLabel.toLowerCase().includes('close') ||
+                ariaLabel.includes('關閉') ||
+                ['×', 'x', 'X', '✕', '關閉'].includes(text);
+
+            if (looksLikeClose) {
+                el.click();
+                return true;
+            }
+        }
+
+        return false;
+    });
+
+    if (clickedClose) {
+        await page.waitForTimeout(800);
+        return true;
+    }
+
+    const closePoint = await page.evaluate(() => {
+        const isVisible = (el) => {
+            const rect = el.getBoundingClientRect();
+            const style = window.getComputedStyle(el);
+            return rect.width > 200 &&
+                rect.height > 100 &&
+                style.visibility !== 'hidden' &&
+                style.display !== 'none' &&
+                style.opacity !== '0';
+        };
+
+        const dialogs = Array.from(document.querySelectorAll('div, section, article'))
+            .filter(el => {
+                if (!isVisible(el)) return false;
+                const rect = el.getBoundingClientRect();
+                return /簽到成功|恭喜獲得/.test(el.innerText || '') &&
+                    rect.width >= 250 &&
+                    rect.width <= Math.min(window.innerWidth * 0.9, 900) &&
+                    rect.height >= 120 &&
+                    rect.height <= Math.min(window.innerHeight * 0.8, 700);
+            })
+            .map(el => {
+                const rect = el.getBoundingClientRect();
+                return {
+                    x: Math.max(rect.left + 10, rect.right - 40),
+                    y: Math.max(rect.top + 10, rect.top + 36),
+                    area: rect.width * rect.height
+                };
+            })
+            .sort((a, b) => a.area - b.area);
+
+        return dialogs[0] || null;
+    });
+
+    if (closePoint) {
+        await page.mouse.click(closePoint.x, closePoint.y);
+        await page.waitForTimeout(800);
+        return true;
+    }
+
+    return false;
+}
+
+async function confirmLotteryPromptIfVisible(page) {
+    try {
+        const confirmImage = page.locator('.popup-fixed img.btns1').first();
+        if (await confirmImage.isVisible({ timeout: 15000 })) {
+            await confirmImage.click({ timeout: 5000 });
+            await page.waitForTimeout(1000);
+            return true;
+        }
+    } catch (e) {
+        logger.warn('Lottery confirmation image click failed: ' + e.message);
+    }
+
+    const clickedConfirm = await page.evaluate(() => {
+        const isVisible = (el) => {
+            const rect = el.getBoundingClientRect();
+            const style = window.getComputedStyle(el);
+            return rect.width > 0 &&
+                rect.height > 0 &&
+                style.visibility !== 'hidden' &&
+                style.display !== 'none' &&
+                style.opacity !== '0';
+        };
+
+        const dialogs = Array.from(document.querySelectorAll('div, section, article'))
+            .filter(el => {
+                if (!isVisible(el)) return false;
+                const text = el.innerText || '';
+                const rect = el.getBoundingClientRect();
+                return /繼續參與抽獎|確認|取消/.test(text) &&
+                    rect.width >= 250 &&
+                    rect.width <= Math.min(window.innerWidth * 0.9, 900) &&
+                    rect.height >= 120 &&
+                    rect.height <= Math.min(window.innerHeight * 0.8, 700);
+            })
+            .sort((a, b) => {
+                const ar = a.getBoundingClientRect();
+                const br = b.getBoundingClientRect();
+                return (ar.width * ar.height) - (br.width * br.height);
+            });
+
+        const dialog = dialogs[0];
+        if (!dialog) return false;
+
+        const candidates = Array.from(dialog.querySelectorAll('button, div, span, a, img'));
+        for (const el of candidates) {
+            if (!isVisible(el)) continue;
+            const text = (
+                el.innerText ||
+                el.textContent ||
+                el.getAttribute('alt') ||
+                el.getAttribute('title') ||
+                ''
+            ).trim();
+            const className = typeof el.className === 'string' ? el.className : '';
+            if ((text.includes('確認') || className.includes('confirm')) && !text.includes('取消')) {
+                el.click();
+                return true;
+            }
+        }
+
+        return false;
+    });
+
+    if (clickedConfirm) {
+        await page.waitForTimeout(1000);
+        return true;
+    }
+
+    await page.waitForTimeout(2500);
+
+    const confirmPoint = await page.evaluate(() => {
+        const isVisible = (el) => {
+            const rect = el.getBoundingClientRect();
+            const style = window.getComputedStyle(el);
+            return rect.width > 0 &&
+                rect.height > 0 &&
+                style.visibility !== 'hidden' &&
+                style.display !== 'none' &&
+                style.opacity !== '0';
+        };
+
+        const dialogs = Array.from(document.querySelectorAll('div, section, article'))
+            .filter(el => {
+                if (!isVisible(el)) return false;
+                const rect = el.getBoundingClientRect();
+                return rect.width >= 250 &&
+                    rect.width <= Math.min(window.innerWidth * 0.9, 900) &&
+                    rect.height >= 120 &&
+                    rect.height <= Math.min(window.innerHeight * 0.8, 700) &&
+                    rect.top >= 0 &&
+                    rect.left >= 0 &&
+                    rect.top < window.innerHeight &&
+                    rect.left < window.innerWidth;
+            })
+            .sort((a, b) => {
+                const ar = a.getBoundingClientRect();
+                const br = b.getBoundingClientRect();
+                return (ar.width * ar.height) - (br.width * br.height);
+            });
+
+        const dialog = dialogs[0];
+        if (!dialog) return null;
+
+        const rect = dialog.getBoundingClientRect();
+        return {
+            x: rect.left + rect.width * 0.35,
+            y: rect.top + rect.height * 0.72
+        };
+    });
+
+    if (confirmPoint) {
+        await page.mouse.click(confirmPoint.x, confirmPoint.y);
+        await page.waitForTimeout(1000);
+        return true;
+    }
+
+    const viewport = page.viewportSize();
+    if (viewport) {
+        await page.mouse.click(viewport.width * 0.43, viewport.height * 0.59);
+        await page.waitForTimeout(1000);
+        return true;
+    }
+
+    return false;
+}
+
 async function run() {
     logger.info('Starting daily gift automation...');
     const startTime = Date.now();
@@ -649,6 +881,11 @@ async function run() {
             summaryLog.logCheckIn('Unknown', checkinStatus.daysChecked, null, null, 'Could not determine status');
         }
 
+        const closedRewardPopup = await closeRewardPopupIfVisible(page);
+        if (closedRewardPopup) {
+            logger.info('Closed reward popup before lottery check.');
+        }
+
         logger.info('======================================');
 
 
@@ -757,15 +994,20 @@ async function run() {
                 logger.info(`❌ Total points (${pointsData.total}) is less than 100. Skipping lottery.`);
                 summaryLog.logLottery('Skipped', `Points insufficient (${pointsData.total}/100)`);
             } else {
-                logger.info(`✅ Total points (${pointsData.total}) >= 100. Checking prize availability...`);
+                logger.info(`✅ Total points (${pointsData.total}) >= 100. Checking grand prize availability...`);
 
-                // Check if any prizes have stock available
+                // Only draw when the grand prize (特等獎) has stock available.
                 const prizeStockInfo = await page.evaluate(() => {
                     const stockElements = document.querySelectorAll('.points-show-box-name');
                     const prizes = [];
 
-                    for (const el of stockElements) {
+                    for (const [index, el] of Array.from(stockElements).entries()) {
                         const text = el.innerText || el.textContent || '';
+                        const contextText = [
+                            el.parentElement?.innerText || '',
+                            el.parentElement?.parentElement?.innerText || ''
+                        ].join('\n');
+                        const isGrandPrize = contextText.includes('特等獎');
                         // Look for patterns like "剩餘1份", "剩餘: 10", "剩餘：5"
                         const stockMatch = text.match(/剩餘[：:]?\s*(\d+)/);
 
@@ -774,48 +1016,80 @@ async function run() {
                             prizes.push({
                                 name: text.split(/剩餘/)[0].trim(),
                                 remaining: remaining,
-                                hasStock: remaining > 0
+                                hasStock: remaining > 0,
+                                isGrandPrize
                             });
                         } else if (text.includes('已抽完')) {
                             // Prize is sold out
                             prizes.push({
                                 name: text.split(/已抽完/)[0].trim(),
                                 remaining: 0,
-                                hasStock: false
+                                hasStock: false,
+                                isGrandPrize
                             });
                         }
                     }
 
+                    let grandPrizeIndex = prizes.findIndex(p => p.isGrandPrize);
+                    if (grandPrizeIndex < 0 && prizes.length > 0) {
+                        grandPrizeIndex = 0;
+                    }
+                    prizes.forEach((prize, index) => {
+                        prize.isGrandPrize = index === grandPrizeIndex;
+                    });
+
                     const hasAnyStock = prizes.some(p => p.hasStock);
-                    return { prizes, hasAnyStock };
+                    const grandPrize = prizes.find(p => p.isGrandPrize) || null;
+                    const hasGrandPrizeStock = !!grandPrize && grandPrize.hasStock;
+                    return { prizes, hasAnyStock, grandPrize, hasGrandPrizeStock };
                 });
 
                 logger.info(`Prize Stock Status:`);
                 if (prizeStockInfo.prizes.length > 0) {
                     prizeStockInfo.prizes.forEach(prize => {
-                        logger.info(`  - ${prize.name}: ${prize.remaining} remaining ${prize.hasStock ? '✅' : '❌'}`);
+                        logger.info(`  - ${prize.isGrandPrize ? '[特等獎] ' : ''}${prize.name}: ${prize.remaining} remaining ${prize.hasStock ? '✅' : '❌'}`);
                     });
                 } else {
                     logger.info(`  - No prize information found`);
                 }
 
-                if (prizeStockInfo.hasAnyStock) {
-                    logger.info(`🎰 Prize stock available! Attempting lottery draw...`);
+                if (prizeStockInfo.hasGrandPrizeStock) {
+                    logger.info(`🎰 Grand prize stock available! Attempting lottery draw...`);
 
-                    // Click lottery button
-                    const lotteryClicked = await page.evaluate(() => {
-                        const buttons = document.querySelectorAll('.points-draw');
-                        for (const btn of buttons) {
-                            if (btn.offsetWidth > 0 && btn.offsetHeight > 0) {
-                                btn.click();
-                                return true;
+                    // Click the points lottery button in the lottery area.
+                    // Prefer the visible image target inside .points-draw, then fall back to its parent.
+                    let lotteryClicked = false;
+                    let lotteryClickTarget = null;
+                    const lotterySelectors = [
+                        '#uma > div.points > div > div.points-main > div.points-main-left > div.points-draw > img.bg',
+                        '#uma > div.points > div > div.points-main > div.points-main-left > div.points-draw',
+                        '.points-draw > img.bg',
+                        '.points-draw'
+                    ];
+
+                    for (const selector of lotterySelectors) {
+                        try {
+                            const target = page.locator(selector).first();
+                            if (await target.isVisible({ timeout: 1500 })) {
+                                await target.scrollIntoViewIfNeeded({ timeout: 5000 });
+                                await page.waitForTimeout(300);
+                                await target.click({ timeout: 5000 });
+                                lotteryClicked = true;
+                                lotteryClickTarget = selector;
+                                break;
                             }
+                        } catch (clickError) {
+                            logger.warn(`Lottery click target failed (${selector}): ${clickError.message}`);
                         }
-                        return false;
-                    });
+                    }
 
                     if (lotteryClicked) {
-                        logger.info('✅ Lottery button (.points-draw) clicked!');
+                        logger.info(`✅ Lottery button clicked: ${lotteryClickTarget}`);
+
+                        const lotteryPromptConfirmed = await confirmLotteryPromptIfVisible(page);
+                        if (lotteryPromptConfirmed) {
+                            logger.info('✅ Lottery confirmation prompt accepted.');
+                        }
 
                         // Wait for lottery result
                         await page.waitForTimeout(3000);
@@ -832,7 +1106,13 @@ async function run() {
                             // Restore marquee
                             if (marquee) marquee.style.display = '';
 
+                            const noWinMatch = bodyText.match(/本次未中獎[^。\n]*。?/);
+                            if (noWinMatch) {
+                                return noWinMatch[0];
+                            }
+
                             const resultPatterns = [
+                                /抽獎成功.*?獲得.*?【(.+?)】/,
                                 /恭喜.*?獲得.*?【(.+?)】/,
                                 /抽中了【(.+?)】/,
                                 /獲得.*?【(.+?)】/
@@ -840,7 +1120,7 @@ async function run() {
 
                             for (const pattern of resultPatterns) {
                                 const match = bodyText.match(pattern);
-                                if (match) {
+                                if (match && !match[0].includes('簽到成功')) {
                                     return match[0];
                                 }
                             }
@@ -853,7 +1133,7 @@ async function run() {
                         if (!finalResult) {
                             try {
                                 const historyBtn = page.locator('.points-reward-log');
-                                if (await historyBtn.isVisible()) {
+                                if (await historyBtn.isVisible({ timeout: 2000 })) {
                                     await historyBtn.click();
                                     await page.waitForTimeout(1000);
                                     // Read the first entry from prize history modal
@@ -886,8 +1166,11 @@ async function run() {
                         logger.warn('⚠️ Could not find or click lottery button (.points-draw)');
                     }
                 } else {
-                    logger.info(`❌ No prizes with stock available. Skipping lottery.`);
-                    summaryLog.logLottery('Skipped', 'No prize stock available');
+                    const grandPrizeStatus = prizeStockInfo.grandPrize
+                        ? `Grand prize stock unavailable (${prizeStockInfo.grandPrize.remaining} remaining)`
+                        : 'Grand prize information not found';
+                    logger.info(`❌ ${grandPrizeStatus}. Skipping lottery.`);
+                    summaryLog.logLottery('Skipped', grandPrizeStatus);
                 }
             }
         } catch (lotteryError) {
