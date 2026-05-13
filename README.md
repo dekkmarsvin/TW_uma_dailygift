@@ -136,16 +136,24 @@ PowerShell 排程腳本的執行日誌
 ```
 TW_uma_dailygift/
 ├── src/
-│   ├── automation.js          # 主要自動化邏輯
+│   ├── adapters/
+│   │   └── umaPageAdapter.js  # UMA 頁面 DOM 讀取與操作
+│   ├── domain/
+│   │   ├── checkIn.js         # 簽到狀態解析
+│   │   └── lottery.js         # 積分、獎品庫存、抽獎規則
+│   ├── automation.js          # 主要自動化流程
 │   ├── config.js              # 設定檔
 │   ├── logger.js              # 日誌系統
 │   └── dailySummaryLogger.js  # 每日摘要日誌
+├── test/
+│   ├── checkIn.test.js        # 簽到解析單元測試
+│   └── lottery.test.js        # 抽獎規則單元測試
 ├── logs/
 │   ├── activity.log           # 技術日誌
 │   ├── daily-summary.log      # 每日摘要
 │   └── scheduler.log          # 排程日誌
 ├── docs/
-│   └── function_io.md         # 函數 I/O 文件
+│   └── test_plan.md           # 測試計劃
 ├── goal/
 │   └── goal.md                # 專案目標
 ├── run_automation.ps1         # PowerShell 自動化腳本
@@ -196,14 +204,15 @@ TW_uma_dailygift/
 
 ## 📝 開發文件
 
-- [Function I/O Documentation](docs/function_io.md) - 詳細的函數輸入輸出規格
+- [Test Plan](docs/test_plan.md) - 目前測試範圍與執行方式
 - [Setup Scheduler Guide](SETUP_SCHEDULER.md) - Windows 排程設定教學
-- [Diagnosis Report](diagnosis_report.md) - 登入問題診斷報告
-- [Sign-in Fix Report](signin_fix_report.md) - 簽到功能修復報告
 
 ## 🧪 測試腳本
 
 ```bash
+# 單元測試
+npm test
+
 # 測試通知系統
 node test_notification.js
 
