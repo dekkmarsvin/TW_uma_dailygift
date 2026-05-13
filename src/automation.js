@@ -5,6 +5,8 @@ const path = require('path');
 const config = require('./config');
 const logger = require('./logger');
 const DailySummaryLogger = require('./dailySummaryLogger');
+const UmaPageAdapter = require('./adapters/umaPageAdapter');
+const { getLotteryDecision } = require('./domain/lottery');
 
 const COOKIE_PATH = path.join(__dirname, '../cookies.json');
 
@@ -57,238 +59,6 @@ async function loadCookies(context) {
             return false;
         }
     }
-    return false;
-}
-
-async function closeRewardPopupIfVisible(page) {
-    const clickedClose = await page.evaluate(() => {
-        const isVisible = (el) => {
-            const rect = el.getBoundingClientRect();
-            const style = window.getComputedStyle(el);
-            return rect.width > 0 &&
-                rect.height > 0 &&
-                style.visibility !== 'hidden' &&
-                style.display !== 'none' &&
-                style.opacity !== '0';
-        };
-
-        const dialogs = Array.from(document.querySelectorAll('div, section, article'))
-            .filter(el => {
-                if (!isVisible(el)) return false;
-                const rect = el.getBoundingClientRect();
-                const text = el.innerText || '';
-                return /簽到成功|恭喜獲得/.test(text) &&
-                    rect.width >= 250 &&
-                    rect.width <= Math.min(window.innerWidth * 0.9, 900) &&
-                    rect.height >= 120 &&
-                    rect.height <= Math.min(window.innerHeight * 0.8, 700);
-            })
-            .sort((a, b) => {
-                const ar = a.getBoundingClientRect();
-                const br = b.getBoundingClientRect();
-                return (ar.width * ar.height) - (br.width * br.height);
-            });
-
-        const dialog = dialogs[0];
-        if (!dialog) {
-            return false;
-        }
-
-        const closeCandidates = Array.from(dialog.querySelectorAll(
-            '[class*="close"], [aria-label*="close"], [aria-label*="關閉"], button, img, div, span'
-        ));
-
-        for (const el of closeCandidates) {
-            if (!isVisible(el)) continue;
-
-            const text = (el.innerText || el.textContent || el.getAttribute('alt') || el.getAttribute('title') || '').trim();
-            const className = typeof el.className === 'string' ? el.className : '';
-            const ariaLabel = el.getAttribute('aria-label') || '';
-            const looksLikeClose = className.toLowerCase().includes('close') ||
-                ariaLabel.toLowerCase().includes('close') ||
-                ariaLabel.includes('關閉') ||
-                ['×', 'x', 'X', '✕', '關閉'].includes(text);
-
-            if (looksLikeClose) {
-                el.click();
-                return true;
-            }
-        }
-
-        return false;
-    });
-
-    if (clickedClose) {
-        await page.waitForTimeout(800);
-        return true;
-    }
-
-    const closePoint = await page.evaluate(() => {
-        const isVisible = (el) => {
-            const rect = el.getBoundingClientRect();
-            const style = window.getComputedStyle(el);
-            return rect.width > 200 &&
-                rect.height > 100 &&
-                style.visibility !== 'hidden' &&
-                style.display !== 'none' &&
-                style.opacity !== '0';
-        };
-
-        const dialogs = Array.from(document.querySelectorAll('div, section, article'))
-            .filter(el => {
-                if (!isVisible(el)) return false;
-                const rect = el.getBoundingClientRect();
-                return /簽到成功|恭喜獲得/.test(el.innerText || '') &&
-                    rect.width >= 250 &&
-                    rect.width <= Math.min(window.innerWidth * 0.9, 900) &&
-                    rect.height >= 120 &&
-                    rect.height <= Math.min(window.innerHeight * 0.8, 700);
-            })
-            .map(el => {
-                const rect = el.getBoundingClientRect();
-                return {
-                    x: Math.max(rect.left + 10, rect.right - 40),
-                    y: Math.max(rect.top + 10, rect.top + 36),
-                    area: rect.width * rect.height
-                };
-            })
-            .sort((a, b) => a.area - b.area);
-
-        return dialogs[0] || null;
-    });
-
-    if (closePoint) {
-        await page.mouse.click(closePoint.x, closePoint.y);
-        await page.waitForTimeout(800);
-        return true;
-    }
-
-    return false;
-}
-
-async function confirmLotteryPromptIfVisible(page) {
-    try {
-        const confirmImage = page.locator('.popup-fixed img.btns1').first();
-        if (await confirmImage.isVisible({ timeout: 15000 })) {
-            await confirmImage.click({ timeout: 5000 });
-            await page.waitForTimeout(1000);
-            return true;
-        }
-    } catch (e) {
-        logger.warn('Lottery confirmation image click failed: ' + e.message);
-    }
-
-    const clickedConfirm = await page.evaluate(() => {
-        const isVisible = (el) => {
-            const rect = el.getBoundingClientRect();
-            const style = window.getComputedStyle(el);
-            return rect.width > 0 &&
-                rect.height > 0 &&
-                style.visibility !== 'hidden' &&
-                style.display !== 'none' &&
-                style.opacity !== '0';
-        };
-
-        const dialogs = Array.from(document.querySelectorAll('div, section, article'))
-            .filter(el => {
-                if (!isVisible(el)) return false;
-                const text = el.innerText || '';
-                const rect = el.getBoundingClientRect();
-                return /繼續參與抽獎|確認|取消/.test(text) &&
-                    rect.width >= 250 &&
-                    rect.width <= Math.min(window.innerWidth * 0.9, 900) &&
-                    rect.height >= 120 &&
-                    rect.height <= Math.min(window.innerHeight * 0.8, 700);
-            })
-            .sort((a, b) => {
-                const ar = a.getBoundingClientRect();
-                const br = b.getBoundingClientRect();
-                return (ar.width * ar.height) - (br.width * br.height);
-            });
-
-        const dialog = dialogs[0];
-        if (!dialog) return false;
-
-        const candidates = Array.from(dialog.querySelectorAll('button, div, span, a, img'));
-        for (const el of candidates) {
-            if (!isVisible(el)) continue;
-            const text = (
-                el.innerText ||
-                el.textContent ||
-                el.getAttribute('alt') ||
-                el.getAttribute('title') ||
-                ''
-            ).trim();
-            const className = typeof el.className === 'string' ? el.className : '';
-            if ((text.includes('確認') || className.includes('confirm')) && !text.includes('取消')) {
-                el.click();
-                return true;
-            }
-        }
-
-        return false;
-    });
-
-    if (clickedConfirm) {
-        await page.waitForTimeout(1000);
-        return true;
-    }
-
-    await page.waitForTimeout(2500);
-
-    const confirmPoint = await page.evaluate(() => {
-        const isVisible = (el) => {
-            const rect = el.getBoundingClientRect();
-            const style = window.getComputedStyle(el);
-            return rect.width > 0 &&
-                rect.height > 0 &&
-                style.visibility !== 'hidden' &&
-                style.display !== 'none' &&
-                style.opacity !== '0';
-        };
-
-        const dialogs = Array.from(document.querySelectorAll('div, section, article'))
-            .filter(el => {
-                if (!isVisible(el)) return false;
-                const rect = el.getBoundingClientRect();
-                return rect.width >= 250 &&
-                    rect.width <= Math.min(window.innerWidth * 0.9, 900) &&
-                    rect.height >= 120 &&
-                    rect.height <= Math.min(window.innerHeight * 0.8, 700) &&
-                    rect.top >= 0 &&
-                    rect.left >= 0 &&
-                    rect.top < window.innerHeight &&
-                    rect.left < window.innerWidth;
-            })
-            .sort((a, b) => {
-                const ar = a.getBoundingClientRect();
-                const br = b.getBoundingClientRect();
-                return (ar.width * ar.height) - (br.width * br.height);
-            });
-
-        const dialog = dialogs[0];
-        if (!dialog) return null;
-
-        const rect = dialog.getBoundingClientRect();
-        return {
-            x: rect.left + rect.width * 0.35,
-            y: rect.top + rect.height * 0.72
-        };
-    });
-
-    if (confirmPoint) {
-        await page.mouse.click(confirmPoint.x, confirmPoint.y);
-        await page.waitForTimeout(1000);
-        return true;
-    }
-
-    const viewport = page.viewportSize();
-    if (viewport) {
-        await page.mouse.click(viewport.width * 0.43, viewport.height * 0.59);
-        await page.waitForTimeout(1000);
-        return true;
-    }
-
     return false;
 }
 
@@ -727,6 +497,7 @@ async function run() {
 
         // Give page a moment to settle after login
         await page.waitForTimeout(3000);
+        const umaPage = new UmaPageAdapter(page, logger);
 
         // Now handling Check-in
         logger.info('======================================');
@@ -734,71 +505,7 @@ async function run() {
         logger.info('======================================');
 
         // First, check if already checked in today
-        const checkinStatus = await page.evaluate(() => {
-            // Look for text indicating already checked in
-            const bodyText = document.body.innerText;
-
-            // Check for "已簽到" or "已累計簽到"
-            const alreadyCheckedIn = bodyText.includes('已簽到') || bodyText.includes('已累計簽到');
-
-            // Try to find the sign-in count
-            const signMatch = bodyText.match(/本月已累計簽到\s*(\d+)\s*天/);
-            const daysChecked = signMatch ? parseInt(signMatch[1]) : null;
-
-            // Look for the check-in button using class .sign-btn
-            const signBtns = document.querySelectorAll('.sign-btn');
-            let checkInBtn = null;
-            let buttonState = null;
-
-            for (const btn of signBtns) {
-                if (btn.offsetWidth > 0 && btn.offsetHeight > 0) {
-                    checkInBtn = btn;
-
-                    // Check button state via CSS and attributes
-                    const computedStyle = window.getComputedStyle(btn);
-                    const filter = computedStyle.filter || '';
-                    const pointerEvents = computedStyle.pointerEvents || '';
-                    const opacity = computedStyle.opacity || '1';
-                    const disabled = btn.disabled || btn.hasAttribute('disabled');
-                    const classList = Array.from(btn.classList);
-
-                    // Button is considered "already checked in" if:
-                    // 1. Has grayscale filter
-                    // 2. pointer-events is 'none'
-                    // 3. Is disabled
-                    // 4. Has opacity < 0.5
-                    // 5. Has class 'disabled' or 'dis' or 'inactive'
-                    const isGrayscale = filter.includes('grayscale') && filter.includes('1');
-                    const isNotClickable = pointerEvents === 'none';
-                    const isLowOpacity = parseFloat(opacity) < 0.5;
-                    const hasDisabledClass = classList.some(c =>
-                        c.includes('disabled') || c === 'dis' || c.includes('inactive')
-                    );
-
-                    buttonState = {
-                        filter,
-                        pointerEvents,
-                        opacity,
-                        disabled,
-                        classList: classList.join(' '),
-                        isGrayscale,
-                        isNotClickable,
-                        isLowOpacity,
-                        hasDisabledClass,
-                        isDisabledByStyle: isGrayscale || isNotClickable || isLowOpacity || disabled || hasDisabledClass
-                    };
-
-                    break;
-                }
-            }
-
-            return {
-                alreadyCheckedIn,
-                daysChecked,
-                hasCheckInButton: !!checkInBtn,
-                buttonState
-            };
-        });
+        const checkinStatus = await umaPage.readCheckInStatus();
 
         logger.info(`Check-in Status:`);
         logger.info(`  - Text indicates already checked in: ${checkinStatus.alreadyCheckedIn ? 'YES' : 'NO'}`);
@@ -832,17 +539,8 @@ async function run() {
             try {
                 logger.info('🎯 Check-in button (.sign-btn) found! Attempting to check in...');
 
-                // Click using JavaScript evaluate with .sign-btn
-                const clicked = await page.evaluate(() => {
-                    const btns = document.querySelectorAll('.sign-btn');
-                    for (const btn of btns) {
-                        if (btn.offsetWidth > 0 && btn.offsetHeight > 0) {
-                            btn.click();
-                            return true;
-                        }
-                    }
-                    return false;
-                });
+                // Click using the UMA page adapter with .sign-btn
+                const clicked = await umaPage.clickCheckInButton();
 
                 const checkInButton = clicked;
                 if (checkInButton) {
@@ -852,11 +550,7 @@ async function run() {
                     await page.waitForTimeout(3000);
 
                     // Verify check-in was successful
-                    const newStatus = await page.evaluate(() => {
-                        const bodyText = document.body.innerText;
-                        const signMatch = bodyText.match(/本月已累計簽到\s*(\d+)\s*天/);
-                        return signMatch ? parseInt(signMatch[1]) : null;
-                    });
+                    const newStatus = await umaPage.readCheckInDays();
 
                     if (newStatus !== null && newStatus > checkinStatus.daysChecked) {
                         logger.info(`✅ Check-in successful! Total days: ${newStatus} (was ${checkinStatus.daysChecked})`);
@@ -881,7 +575,7 @@ async function run() {
             summaryLog.logCheckIn('Unknown', checkinStatus.daysChecked, null, null, 'Could not determine status');
         }
 
-        const closedRewardPopup = await closeRewardPopupIfVisible(page);
+        const closedRewardPopup = await umaPage.closeRewardPopupIfVisible();
         if (closedRewardPopup) {
             logger.info('Closed reward popup before lottery check.');
         }
@@ -895,87 +589,8 @@ async function run() {
         logger.info('======================================');
 
         try {
-            // Extract points data from the page using DOM traversal for better accuracy
-            const pointsData = await page.evaluate(() => {
-                const bodyText = document.body.innerText;
-
-                // Helper to clean non-numeric characters
-                const extractNumber = (str) => {
-                    const match = str.match(/(\d+)/);
-                    return match ? parseInt(match[1]) : null;
-                };
-
-                // Strategy 1: Find elements containing specific keywords
-                const keywordMap = {
-                    current: ['本年度積分', '今年積分'],
-                    expiring: ['即將過期積分', '即將到期', '過期積分'],
-                    total: ['總積分', '剩餘積分']
-                };
-
-                let currentYear = null;
-                let expiring = null;
-                let total = null;
-                let debugInfo = [];
-
-                // Find all potential text elements
-                const allElements = document.querySelectorAll('div, span, p, label, li, b, strong');
-
-                for (const el of allElements) {
-                    if (el.offsetWidth === 0 || el.offsetHeight === 0) continue;
-
-                    // Direct text content of this node only (avoiding children text)
-                    const clone = el.cloneNode(true);
-                    Array.from(clone.children).forEach(c => c.remove());
-                    const text = clone.innerText ? clone.innerText.trim() : '';
-
-                    if (!text || text.length > 50) continue;
-
-                    if (text.includes('積分')) {
-                        debugInfo.push(`Found '積分' in <${el.tagName.toLowerCase()}>: "${text}"`);
-                    }
-
-                    // Check for Current Year
-                    if (keywordMap.current.some(k => text.includes(k))) {
-                        const num = extractNumber(text);
-                        if (num !== null) currentYear = num;
-                    }
-
-                    // Check for Expiring
-                    if (keywordMap.expiring.some(k => text.includes(k))) {
-                        const num = extractNumber(text);
-                        if (num !== null) expiring = num;
-                    }
-
-                    // Check for Total
-                    if (keywordMap.total.some(k => text.includes(k))) {
-                        const num = extractNumber(text);
-                        if (num !== null) total = num;
-                    }
-                }
-
-                // Strategy 2: Fallback to regex on Body Text
-                if (currentYear === null || expiring === null) {
-                    const currentYearMatch = bodyText.match(/本年度積分[：:\s]*(\d+)/);
-                    const expiringMatch = bodyText.match(/即將過期積分[：:\s]*(\d+)/);
-
-                    if (currentYear === null && currentYearMatch) currentYear = parseInt(currentYearMatch[1]);
-                    if (expiring === null && expiringMatch) expiring = parseInt(expiringMatch[1]);
-                }
-
-                currentYear = currentYear !== null ? currentYear : 0;
-                expiring = expiring !== null ? expiring : 0;
-
-                if (total === null) {
-                    total = currentYear + expiring;
-                }
-
-                return {
-                    currentYear,
-                    expiring,
-                    total,
-                    debugInfo: debugInfo.slice(0, 15)
-                };
-            });
+            // Extract points data from the page using the UMA page adapter.
+            const pointsData = await umaPage.readPoints();
 
             logger.info(`Points Summary:`);
             logger.info(`  - Current year points: ${pointsData.currentYear}`);
@@ -990,60 +605,15 @@ async function run() {
 
             summaryLog.logPoints(pointsData.currentYear, pointsData.expiring, pointsData.total);
 
-            if (pointsData.total < 100) {
-                logger.info(`❌ Total points (${pointsData.total}) is less than 100. Skipping lottery.`);
-                summaryLog.logLottery('Skipped', `Points insufficient (${pointsData.total}/100)`);
-            } else {
+            const prizeStockInfo = pointsData.total >= 100 ? await umaPage.readPrizeStock() : {
+                prizes: [],
+                hasAnyStock: false,
+                grandPrize: null,
+                hasGrandPrizeStock: false
+            };
+
+            if (pointsData.total >= 100) {
                 logger.info(`✅ Total points (${pointsData.total}) >= 100. Checking grand prize availability...`);
-
-                // Only draw when the grand prize (特等獎) has stock available.
-                const prizeStockInfo = await page.evaluate(() => {
-                    const stockElements = document.querySelectorAll('.points-show-box-name');
-                    const prizes = [];
-
-                    for (const [index, el] of Array.from(stockElements).entries()) {
-                        const text = el.innerText || el.textContent || '';
-                        const contextText = [
-                            el.parentElement?.innerText || '',
-                            el.parentElement?.parentElement?.innerText || ''
-                        ].join('\n');
-                        const isGrandPrize = contextText.includes('特等獎');
-                        // Look for patterns like "剩餘1份", "剩餘: 10", "剩餘：5"
-                        const stockMatch = text.match(/剩餘[：:]?\s*(\d+)/);
-
-                        if (stockMatch) {
-                            const remaining = parseInt(stockMatch[1]);
-                            prizes.push({
-                                name: text.split(/剩餘/)[0].trim(),
-                                remaining: remaining,
-                                hasStock: remaining > 0,
-                                isGrandPrize
-                            });
-                        } else if (text.includes('已抽完')) {
-                            // Prize is sold out
-                            prizes.push({
-                                name: text.split(/已抽完/)[0].trim(),
-                                remaining: 0,
-                                hasStock: false,
-                                isGrandPrize
-                            });
-                        }
-                    }
-
-                    let grandPrizeIndex = prizes.findIndex(p => p.isGrandPrize);
-                    if (grandPrizeIndex < 0 && prizes.length > 0) {
-                        grandPrizeIndex = 0;
-                    }
-                    prizes.forEach((prize, index) => {
-                        prize.isGrandPrize = index === grandPrizeIndex;
-                    });
-
-                    const hasAnyStock = prizes.some(p => p.hasStock);
-                    const grandPrize = prizes.find(p => p.isGrandPrize) || null;
-                    const hasGrandPrizeStock = !!grandPrize && grandPrize.hasStock;
-                    return { prizes, hasAnyStock, grandPrize, hasGrandPrizeStock };
-                });
-
                 logger.info(`Prize Stock Status:`);
                 if (prizeStockInfo.prizes.length > 0) {
                     prizeStockInfo.prizes.forEach(prize => {
@@ -1052,125 +622,47 @@ async function run() {
                 } else {
                     logger.info(`  - No prize information found`);
                 }
+            }
 
-                if (prizeStockInfo.hasGrandPrizeStock) {
-                    logger.info(`🎰 Grand prize stock available! Attempting lottery draw...`);
+            const lotteryDecision = getLotteryDecision(pointsData, prizeStockInfo);
+            if (!lotteryDecision.shouldDraw) {
+                logger.info(`❌ ${lotteryDecision.reason}. Skipping lottery.`);
+                summaryLog.logLottery('Skipped', lotteryDecision.reason);
+            } else {
+                logger.info(`🎰 ${lotteryDecision.reason}! Attempting lottery draw...`);
 
-                    // Click the points lottery button in the lottery area.
-                    // Prefer the visible image target inside .points-draw, then fall back to its parent.
-                    let lotteryClicked = false;
-                    let lotteryClickTarget = null;
-                    const lotterySelectors = [
-                        '#uma > div.points > div > div.points-main > div.points-main-left > div.points-draw > img.bg',
-                        '#uma > div.points > div > div.points-main > div.points-main-left > div.points-draw',
-                        '.points-draw > img.bg',
-                        '.points-draw'
-                    ];
+                const lotteryClick = await umaPage.clickLotteryButton();
+                if (lotteryClick.clicked) {
+                    logger.info(`✅ Lottery button clicked: ${lotteryClick.targetSelector}`);
 
-                    for (const selector of lotterySelectors) {
-                        try {
-                            const target = page.locator(selector).first();
-                            if (await target.isVisible({ timeout: 1500 })) {
-                                await target.scrollIntoViewIfNeeded({ timeout: 5000 });
-                                await page.waitForTimeout(300);
-                                await target.click({ timeout: 5000 });
-                                lotteryClicked = true;
-                                lotteryClickTarget = selector;
-                                break;
-                            }
-                        } catch (clickError) {
-                            logger.warn(`Lottery click target failed (${selector}): ${clickError.message}`);
-                        }
+                    const lotteryPromptConfirmed = await umaPage.confirmLotteryPromptIfVisible();
+                    if (lotteryPromptConfirmed) {
+                        logger.info('✅ Lottery confirmation prompt accepted.');
                     }
 
-                    if (lotteryClicked) {
-                        logger.info(`✅ Lottery button clicked: ${lotteryClickTarget}`);
+                    // Wait for lottery result
+                    await page.waitForTimeout(3000);
 
-                        const lotteryPromptConfirmed = await confirmLotteryPromptIfVisible(page);
-                        if (lotteryPromptConfirmed) {
-                            logger.info('✅ Lottery confirmation prompt accepted.');
-                        }
+                    let finalResult = await umaPage.readLotteryResult();
+                    if (!finalResult) {
+                        finalResult = await umaPage.readLotteryResultFromHistory();
+                    }
 
-                        // Wait for lottery result
-                        await page.waitForTimeout(3000);
+                    const resultMsg = finalResult || 'Lottery drawn - check manually for result';
 
-                        // Try to capture the result from modal/popup
-                        const lotteryResult = await page.evaluate(() => {
-                            // Hide the marquee (.points-left-title) to exclude other users' records
-                            const marquee = document.querySelector('.points-left-title');
-                            if (marquee) marquee.style.display = 'none';
+                    logger.info(`🎁 Lottery Result: ${resultMsg}`);
+                    summaryLog.logLottery('Success', resultMsg);
 
-                            // Try to find result patterns from the page (excluding marquee)
-                            const bodyText = document.body.innerText;
-
-                            // Restore marquee
-                            if (marquee) marquee.style.display = '';
-
-                            const noWinMatch = bodyText.match(/本次未中獎[^。\n]*。?/);
-                            if (noWinMatch) {
-                                return noWinMatch[0];
-                            }
-
-                            const resultPatterns = [
-                                /抽獎成功.*?獲得.*?【(.+?)】/,
-                                /恭喜.*?獲得.*?【(.+?)】/,
-                                /抽中了【(.+?)】/,
-                                /獲得.*?【(.+?)】/
-                            ];
-
-                            for (const pattern of resultPatterns) {
-                                const match = bodyText.match(pattern);
-                                if (match && !match[0].includes('簽到成功')) {
-                                    return match[0];
-                                }
-                            }
-
-                            return null;
-                        });
-
-                        // Fallback: click 中獎記錄 to get user's own prize history
-                        let finalResult = lotteryResult;
-                        if (!finalResult) {
-                            try {
-                                const historyBtn = page.locator('.points-reward-log');
-                                if (await historyBtn.isVisible({ timeout: 2000 })) {
-                                    await historyBtn.click();
-                                    await page.waitForTimeout(1000);
-                                    // Read the first entry from prize history modal
-                                    finalResult = await page.evaluate(() => {
-                                        // Look for the newest history entry in any visible modal/popup
-                                        const visibleText = document.body.innerText;
-                                        const historyMatch = visibleText.match(/抽中了【(.+?)】/);
-                                        return historyMatch ? historyMatch[0] : null;
-                                    });
-                                }
-                            } catch (e) {
-                                // Ignore history button errors
-                            }
-                        }
-
-                        const resultMsg = finalResult || 'Lottery drawn - check manually for result';
-
-                        logger.info(`🎁 Lottery Result: ${resultMsg}`);
-                        summaryLog.logLottery('Success', resultMsg);
-
-                        // Take screenshot of result
-                        try {
-                            const lotteryScreenshot = path.join(__dirname, '../logs/lottery_result.png');
-                            await page.screenshot({ path: lotteryScreenshot, fullPage: true });
-                            logger.info(`Screenshot saved: ${lotteryScreenshot}`);
-                        } catch (screenshotErr) {
-                            logger.warn('Could not save lottery screenshot');
-                        }
-                    } else {
-                        logger.warn('⚠️ Could not find or click lottery button (.points-draw)');
+                    // Take screenshot of result
+                    try {
+                        const lotteryScreenshot = path.join(__dirname, '../logs/lottery_result.png');
+                        await page.screenshot({ path: lotteryScreenshot, fullPage: true });
+                        logger.info(`Screenshot saved: ${lotteryScreenshot}`);
+                    } catch (screenshotErr) {
+                        logger.warn('Could not save lottery screenshot');
                     }
                 } else {
-                    const grandPrizeStatus = prizeStockInfo.grandPrize
-                        ? `Grand prize stock unavailable (${prizeStockInfo.grandPrize.remaining} remaining)`
-                        : 'Grand prize information not found';
-                    logger.info(`❌ ${grandPrizeStatus}. Skipping lottery.`);
-                    summaryLog.logLottery('Skipped', grandPrizeStatus);
+                    logger.warn('⚠️ Could not find or click lottery button (.points-draw)');
                 }
             }
         } catch (lotteryError) {
@@ -1192,6 +684,7 @@ async function run() {
         logger.info('Daily summary logged.');
 
     } catch (error) {
+        process.exitCode = 1;
         const errorMsg = `執行錯誤: ${error.message}`;
         logger.error(`Error: ${error.message}`);
         sendWindowsNotification('UMA 每日禮物 - 執行失敗', errorMsg, 'error');

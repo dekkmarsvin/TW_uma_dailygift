@@ -61,14 +61,16 @@ try {
     $StartTime = Get-Date
     
     node src/automation.js
+    $AutomationExitCode = $LASTEXITCODE
     
     $EndTime = Get-Date
     $Duration = ($EndTime - $StartTime).TotalSeconds
     
-    if ($LASTEXITCODE -eq 0) {
+    if ($AutomationExitCode -eq 0) {
         Write-Log "✅ Automation completed successfully (Duration: $([math]::Round($Duration, 2))s)"
     } else {
-        Write-Log "⚠️ Automation exited with code: $LASTEXITCODE"
+        Write-Log "⚠️ Automation exited with code: $AutomationExitCode"
+        exit $AutomationExitCode
     }
     
 } catch {
