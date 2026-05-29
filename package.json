@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "umamatch:dry-run": "node src/umamatchAutomation.js --dry-run",
+    "umamatch:claim": "node src/umamatchAutomation.js --claim"
   },
   "keywords": [],
   "author": "",

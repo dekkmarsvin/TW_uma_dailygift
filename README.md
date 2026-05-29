@@ -213,12 +213,28 @@ TW_uma_dailygift/
 # 單元測試
 npm test
 
+# 4週年自訂配對大賽任務檢查（只讀取狀態，不領取）
+npm run umamatch:dry-run
+
+# 4週年自訂配對大賽任務領取（只領取已完成且尚未領取的任務）
+npm run umamatch:claim
+
 # 測試通知系統
 node test_notification.js
 
 # 測試抽獎功能
 node test_lottery_feature.js
 ```
+
+## 4週年自訂配對大賽任務
+
+`src/umamatchAutomation.js` 會複用根目錄 `cookies.json` 的 KOMOE session，讀取以下任務狀態：
+
+- 每日任務: `list-daily`
+- 每週累計任務: `milestone`
+- 活動任務: `list-one-time`
+
+預設請先跑 `npm run umamatch:dry-run` 檢查可領取清單。確認無誤後再跑 `npm run umamatch:claim`，程式只會對 `isCompleted === true`、`isRewarded !== true`、未結束且在可領取時間內的任務呼叫領取 API。
 
 ## ⚠️ 注意事項
 
