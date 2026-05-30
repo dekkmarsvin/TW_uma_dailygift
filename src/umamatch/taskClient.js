@@ -3,6 +3,7 @@ const ENDPOINTS = {
     milestone: '/api/v1/client/task/milestone',
     oneTime: '/api/v1/client/task/list-one-time',
     claimReward: '/api/v1/client/task/claim-reward',
+    reportShare: '/api/v1/client/task/report-share',
     userAsset: '/api/v1/client/user/asset'
 };
 
@@ -42,6 +43,10 @@ class UmamatchTaskClient {
 
     async claimReward(taskId) {
         return this.getData('POST', ENDPOINTS.claimReward, { taskId });
+    }
+
+    async reportShare(taskId) {
+        return this.getData('POST', ENDPOINTS.reportShare, { taskId });
     }
 }
 

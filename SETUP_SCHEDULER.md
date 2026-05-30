@@ -21,7 +21,7 @@
 1. 在右側「動作」面板中，點擊 **建立基本工作**
 2. 填入以下資訊：
    - **名稱**: `UMA Daily Gift Automation`
-   - **描述**: `自動領取 UMA 每日簽到獎勵`
+   - **描述**: `自動領取 UMA 每日簽到與自訂配對大賽任務獎勵`
 3. 點擊「下一步」
 
 ### 步驟 3: 設定觸發程序
@@ -190,6 +190,7 @@ cd D:\Workspace\Github\TW_uma_dailygift
 
 # 或直接執行 Node.js 腳本
 node src/automation.js
+node src/umamatchAutomation.js --claim
 ```
 
 ## 📅 建議排程時間

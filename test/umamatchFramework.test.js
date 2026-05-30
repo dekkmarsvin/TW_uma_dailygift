@@ -7,6 +7,7 @@ const path = require('path');
 const { loadCookies } = require('../src/core/cookieStore');
 const { createPageRequest } = require('../src/umamatch/pageRequest');
 const { parseCliOptions } = require('../src/umamatch/cli');
+const { completeDailyShareTask } = require('../src/umamatch/dailyShareCompleter');
 
 test('loadCookies adds cookies from a Playwright cookie file', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'umamatch-cookies-'));
@@ -86,4 +87,80 @@ test('parseCliOptions rejects unknown arguments', () => {
         () => parseCliOptions(['--unexpected']),
         /Unknown argument: --unexpected/
     );
+});
+
+test('completeDailyShareTask clicks go-complete and then an available share action', async () => {
+    const operations = [];
+    const page = {
+        async goto(url, options) {
+            operations.push({ op: 'goto', url, options });
+        },
+        async waitForTimeout(ms) {
+            operations.push({ op: 'wait', ms });
+        },
+        async evaluate(fn) {
+            const source = String(fn);
+            if (source.includes('每日分享1次拼圖交換')) {
+                operations.push({ op: 'click-go-complete' });
+                return true;
+            }
+            if (source.includes('贈送') && source.includes('徵求') && source.includes('交換')) {
+                operations.push({ op: 'click-share-action' });
+                return { clicked: true, label: '贈送' };
+            }
+            throw new Error('unexpected evaluate callback');
+        }
+    };
+
+    const result = await completeDailyShareTask({
+        page,
+        eventUrl: 'https://uma.komoejoy.com/umamatch/events/',
+        logger: { info() {}, warn() {} }
+    });
+
+    assert.deepEqual(result, { completed: true, actionLabel: '贈送' });
+    assert.deepEqual(operations, [
+        {
+            op: 'goto',
+            url: 'https://uma.komoejoy.com/umamatch/events/task/',
+            options: { waitUntil: 'domcontentloaded', timeout: 60000 }
+        },
+        { op: 'wait', ms: 2000 },
+        { op: 'click-go-complete' },
+        { op: 'wait', ms: 2000 },
+        { op: 'click-share-action' },
+        { op: 'wait', ms: 2000 }
+    ]);
+});
+
+test('completeDailyShareTask falls back to task detail page when go-complete is unavailable', async () => {
+    const operations = [];
+    const page = {
+        async goto(url) {
+            operations.push({ op: 'goto', url });
+        },
+        async waitForTimeout() {},
+        async evaluate(fn) {
+            const source = String(fn);
+            if (source.includes('每日分享1次拼圖交換')) {
+                return false;
+            }
+            if (source.includes('贈送') && source.includes('徵求') && source.includes('交換')) {
+                return { clicked: true, label: '交換' };
+            }
+            throw new Error('unexpected evaluate callback');
+        }
+    };
+
+    const result = await completeDailyShareTask({
+        page,
+        eventUrl: 'https://uma.komoejoy.com/umamatch/events/',
+        logger: { info() {}, warn() {} }
+    });
+
+    assert.deepEqual(result, { completed: true, actionLabel: '交換' });
+    assert.deepEqual(operations.map(item => item.url), [
+        'https://uma.komoejoy.com/umamatch/events/task/',
+        'https://uma.komoejoy.com/umamatch/events/task-detail/'
+    ]);
 });

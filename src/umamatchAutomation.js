@@ -6,6 +6,7 @@ const { UmamatchTaskClient } = require('./umamatch/taskClient');
 const { createPageRequest } = require('./umamatch/pageRequest');
 const { runUmamatchTasks } = require('./umamatch/runner');
 const { parseCliOptions } = require('./umamatch/cli');
+const { completeDailyShareTask } = require('./umamatch/dailyShareCompleter');
 
 const COOKIE_PATH = path.join(__dirname, '../cookies.json');
 const EVENT_URL = 'https://uma.komoejoy.com/umamatch/events/';
@@ -25,7 +26,12 @@ async function run(argv = process.argv.slice(2)) {
         const client = new UmamatchTaskClient({
             request: createPageRequest({ page, baseUrl: API_BASE_URL })
         });
-        const result = await runUmamatchTasks({ client, claim: options.claim, logger });
+        const result = await runUmamatchTasks({
+            client,
+            claim: options.claim,
+            logger,
+            completeDailyShareTask: task => completeDailyShareTask({ page, eventUrl: EVENT_URL, logger, task })
+        });
 
         logger.info(`UMA Match task summary: ${JSON.stringify(result.summary)}`);
         for (const task of result.claimable) {

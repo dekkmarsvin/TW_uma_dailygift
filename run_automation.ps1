@@ -31,9 +31,49 @@ function Write-Log {
     Write-Host $LogMessage
 }
 
+function Invoke-AutomationStep {
+    param(
+        [string]$Name,
+        [string]$ScriptPath,
+        [string[]]$Arguments = @()
+    )
+
+    if (!(Test-Path (Join-Path $ScriptDir $ScriptPath))) {
+        Write-Log "ERROR: $Name script not found at $ScriptPath"
+        return [PSCustomObject]@{
+            Name = $Name
+            ExitCode = 1
+            Duration = 0
+        }
+    }
+
+    Write-Log "----------------------------------------"
+    Write-Log "Starting $Name"
+    Write-Log "Executing: node $ScriptPath $($Arguments -join ' ')"
+    $StartTime = Get-Date
+
+    & node $ScriptPath @Arguments
+    $StepExitCode = $LASTEXITCODE
+
+    $EndTime = Get-Date
+    $Duration = ($EndTime - $StartTime).TotalSeconds
+
+    if ($StepExitCode -eq 0) {
+        Write-Log "$Name completed successfully (Duration: $([math]::Round($Duration, 2))s)"
+    } else {
+        Write-Log "$Name exited with code: $StepExitCode (Duration: $([math]::Round($Duration, 2))s)"
+    }
+
+    return [PSCustomObject]@{
+        Name = $Name
+        ExitCode = $StepExitCode
+        Duration = $Duration
+    }
+}
+
 try {
     Write-Log "========================================"
-    Write-Log "Starting UMA Daily Gift Automation"
+    Write-Log "Starting UMA scheduled automations"
     Write-Log "========================================"
     
     # Change to script directory
@@ -49,29 +89,24 @@ try {
         throw "Node.js not found"
     }
     
-    # Check if automation script exists
-    $AutomationScript = Join-Path $ScriptDir "src\automation.js"
-    if (!(Test-Path $AutomationScript)) {
-        Write-Log "ERROR: automation.js not found at $AutomationScript"
-        throw "Automation script not found"
+    $FailedSteps = @()
+
+    $Result = Invoke-AutomationStep -Name "UMA Daily Gift" -ScriptPath "src/automation.js"
+    if ($Result.ExitCode -ne 0) {
+        $FailedSteps += $Result
     }
-    
-    # Run automation
-    Write-Log "Executing automation script..."
-    $StartTime = Get-Date
-    
-    node src/automation.js
-    $AutomationExitCode = $LASTEXITCODE
-    
-    $EndTime = Get-Date
-    $Duration = ($EndTime - $StartTime).TotalSeconds
-    
-    if ($AutomationExitCode -eq 0) {
-        Write-Log "✅ Automation completed successfully (Duration: $([math]::Round($Duration, 2))s)"
-    } else {
-        Write-Log "⚠️ Automation exited with code: $AutomationExitCode"
-        exit $AutomationExitCode
+
+    $Result = Invoke-AutomationStep -Name "UMA Match Tasks" -ScriptPath "src/umamatchAutomation.js" -Arguments @("--claim")
+    if ($Result.ExitCode -ne 0) {
+        $FailedSteps += $Result
     }
+
+    if ($FailedSteps.Count -gt 0) {
+        $FailedNames = ($FailedSteps | ForEach-Object { "$($_.Name) (exit $($_.ExitCode))" }) -join ", "
+        throw "One or more automation steps failed: $FailedNames"
+    }
+
+    Write-Log "All automation steps completed successfully."
     
 } catch {
     Write-Log "❌ ERROR: $_"

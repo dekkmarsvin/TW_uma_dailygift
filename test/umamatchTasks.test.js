@@ -162,6 +162,86 @@ test('runUmamatchTasks claim mode claims only eligible tasks', async () => {
     ]);
 });
 
+test('runUmamatchTasks dry-run does not complete unfinished daily share task', async () => {
+    let completeShareCalls = 0;
+    const result = await runUmamatchTasks({
+        claim: false,
+        completeDailyShareTask: async () => {
+            completeShareCalls++;
+        },
+        client: {
+            async getDailyTasks() {
+                return [
+                    { taskId: 'uma-4-task3', title: '每日分享1次拼圖交換、徵求或贈送連結', isCompleted: false, isRewarded: false, award: { POINT: 2 } }
+                ];
+            },
+            async getMilestoneTasks() {
+                return [];
+            },
+            async getOneTimeTasks() {
+                return [];
+            },
+            async claimReward() {
+                throw new Error('dry-run should not claim');
+            }
+        },
+        logger: { info() {}, warn() {} }
+    });
+
+    assert.equal(completeShareCalls, 0);
+    assert.deepEqual(result.claimable, []);
+});
+
+test('runUmamatchTasks claim mode completes unfinished daily share task before claiming refreshed rewards', async () => {
+    let dailyReads = 0;
+    let completeShareCalls = 0;
+    const reportedShares = [];
+    const claimed = [];
+
+    const result = await runUmamatchTasks({
+        claim: true,
+        completeDailyShareTask: async task => {
+            completeShareCalls++;
+            assert.equal(task.taskId, 'uma-4-task3');
+            return { completed: true };
+        },
+        client: {
+            async getDailyTasks() {
+                dailyReads++;
+                if (dailyReads === 1) {
+                    return [
+                        { taskId: 'uma-4-task3', title: '每日分享1次拼圖交換、徵求或贈送連結', isCompleted: false, isRewarded: false, award: { POINT: 2 } }
+                    ];
+                }
+                return [
+                    { taskId: 'uma-4-task3', title: '每日分享1次拼圖交換、徵求或贈送連結', isCompleted: true, isRewarded: false, award: { POINT: 2 } }
+                ];
+            },
+            async getMilestoneTasks() {
+                return [];
+            },
+            async getOneTimeTasks() {
+                return [];
+            },
+            async reportShare(taskId) {
+                reportedShares.push(taskId);
+                return { ok: true };
+            },
+            async claimReward(taskId) {
+                claimed.push(taskId);
+                return { ok: true };
+            }
+        },
+        logger: { info() {}, warn() {} }
+    });
+
+    assert.equal(completeShareCalls, 1);
+    assert.deepEqual(reportedShares, ['uma-4-task3']);
+    assert.equal(dailyReads, 2);
+    assert.deepEqual(claimed, ['uma-4-task3']);
+    assert.deepEqual(result.shareCompletion, { attempted: true, completed: true, reportShare: { ok: true } });
+});
+
 test('UmamatchTaskClient reads task sections from the expected endpoints', async () => {
     const requests = [];
     const client = new UmamatchTaskClient({
@@ -197,6 +277,25 @@ test('UmamatchTaskClient posts taskId when claiming a reward', async () => {
             method: 'POST',
             path: '/api/v1/client/task/claim-reward',
             body: { taskId: 'uma-4-task1' }
+        }
+    ]);
+});
+
+test('UmamatchTaskClient posts taskId when reporting a share task', async () => {
+    const requests = [];
+    const client = new UmamatchTaskClient({
+        request: async ({ method, path, body }) => {
+            requests.push({ method, path, body });
+            return { code: 0, data: { reported: true } };
+        }
+    });
+
+    assert.deepEqual(await client.reportShare('uma-4-task3'), { reported: true });
+    assert.deepEqual(requests, [
+        {
+            method: 'POST',
+            path: '/api/v1/client/task/report-share',
+            body: { taskId: 'uma-4-task3' }
         }
     ]);
 });

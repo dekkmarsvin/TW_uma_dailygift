@@ -73,7 +73,7 @@ node src/automation.js
 
 請參閱 [SETUP_SCHEDULER.md](SETUP_SCHEDULER.md) 設定 Windows 工作排程器。
 
-建議設定：每天上午 9:00 自動執行
+建議設定：每天上午 9:00 自動執行。`run_automation.ps1` 會依序執行 UMA 每日簽到與 4週年自訂配對大賽任務領取；若其中一個流程失敗，仍會嘗試執行另一個流程，最後再回報排程失敗。
 
 ## 📊 日誌檔案
 
@@ -234,7 +234,9 @@ node test_lottery_feature.js
 - 每週累計任務: `milestone`
 - 活動任務: `list-one-time`
 
-預設請先跑 `npm run umamatch:dry-run` 檢查可領取清單。確認無誤後再跑 `npm run umamatch:claim`，程式只會對 `isCompleted === true`、`isRewarded !== true`、未結束且在可領取時間內的任務呼叫領取 API。
+預設請先跑 `npm run umamatch:dry-run` 檢查可領取清單。dry-run 只讀取任務狀態，不會完成任務或領取獎勵。
+
+確認無誤後再跑 `npm run umamatch:claim`。claim 模式會先檢查「每日分享1次拼圖交換、徵求或贈送連結」是否尚未完成；若尚未完成，會進入任務頁並點選「去完成」，再於任務詳情頁點選任一個可見的「贈送」、「徵求」或「交換」按鈕，讓系統判定分享任務完成。之後程式會重新讀取任務狀態，只對 `isCompleted === true`、`isRewarded !== true`、未結束且在可領取時間內的任務呼叫領取 API。
 
 ## ⚠️ 注意事項
 
