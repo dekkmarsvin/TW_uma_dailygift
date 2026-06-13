@@ -44,17 +44,34 @@ async function runUmamatchTasks({ client, claim = false, completeDailyShareTask 
         }
     }
 
-    const summary = summarizeTaskSections(sections);
-    const claimable = collectClaimableTasks(sections);
+    let summary = summarizeTaskSections(sections);
+    let claimable = collectClaimableTasks(sections);
 
     logger.info(`UMA Match tasks: ${claimable.length} claimable reward(s).`);
 
     const claimResults = [];
+    let claimRounds = 0;
     if (claim) {
-        for (const task of claimable) {
-            logger.info(`Claiming ${task.category} reward: ${task.title} (${task.taskId})`);
-            const result = await client.claimReward(task.taskId);
-            claimResults.push({ taskId: task.taskId, ...result });
+        const claimedTaskIds = new Set();
+        const maxClaimRounds = 5;
+
+        while (claimable.length > 0 && claimRounds < maxClaimRounds) {
+            claimRounds++;
+            for (const task of claimable) {
+                logger.info(`Claiming ${task.category} reward: ${task.title} (${task.taskId})`);
+                const result = await client.claimReward(task.taskId);
+                claimedTaskIds.add(task.taskId);
+                claimResults.push({ taskId: task.taskId, ...result });
+            }
+
+            sections = await readTaskSections(client);
+            summary = summarizeTaskSections(sections);
+            claimable = collectClaimableTasks(sections)
+                .filter(task => !claimedTaskIds.has(task.taskId));
+        }
+
+        if (claimable.length > 0) {
+            logger.warn(`Stopped after ${maxClaimRounds} claim rounds with ${claimable.length} reward(s) still claimable.`);
         }
     } else if (claimable.length > 0) {
         logger.info('Dry-run mode: no rewards were claimed.');
@@ -66,6 +83,7 @@ async function runUmamatchTasks({ client, claim = false, completeDailyShareTask 
         summary,
         claimable,
         claimResults,
+        claimRounds,
         shareCompletion
     };
 }

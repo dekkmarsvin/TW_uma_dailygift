@@ -237,9 +237,55 @@ test('runUmamatchTasks claim mode completes unfinished daily share task before c
 
     assert.equal(completeShareCalls, 1);
     assert.deepEqual(reportedShares, ['uma-4-task3']);
-    assert.equal(dailyReads, 2);
+    assert.equal(dailyReads, 3);
     assert.deepEqual(claimed, ['uma-4-task3']);
     assert.deepEqual(result.shareCompletion, { attempted: true, completed: true, reportShare: { ok: true } });
+});
+
+test('runUmamatchTasks claim mode refreshes after claims and picks up newly claimable milestone rewards', async () => {
+    let dailyReads = 0;
+    let milestoneReads = 0;
+    const claimed = [];
+
+    const result = await runUmamatchTasks({
+        claim: true,
+        client: {
+            async getDailyTasks() {
+                dailyReads++;
+                if (dailyReads === 1) {
+                    return [
+                        { taskId: 'daily-ready', title: '每日登入賽事網頁', isCompleted: true, isRewarded: false, award: { POINT: 2 } }
+                    ];
+                }
+                return [
+                    { taskId: 'daily-ready', title: '每日登入賽事網頁', isCompleted: true, isRewarded: true, award: { POINT: 2 } }
+                ];
+            },
+            async getMilestoneTasks() {
+                milestoneReads++;
+                if (milestoneReads < 2) {
+                    return [
+                        { taskId: 'week-ready', circleNum: 3, isCompleted: false, isRewarded: false, status: 0, award: { POINT: 15, COUPON: 2 } }
+                    ];
+                }
+                return [
+                    { taskId: 'week-ready', circleNum: 3, isCompleted: true, isRewarded: false, status: 1, award: { POINT: 15, COUPON: 2 } }
+                ];
+            },
+            async getOneTimeTasks() {
+                return [];
+            },
+            async claimReward(taskId) {
+                claimed.push(taskId);
+                return { ok: true };
+            }
+        },
+        logger: { info() {}, warn() {} }
+    });
+
+    assert.deepEqual(claimed, ['daily-ready', 'week-ready']);
+    assert.equal(result.claimResults.length, 2);
+    assert.equal(result.claimRounds, 2);
 });
 
 test('UmamatchTaskClient reads task sections from the expected endpoints', async () => {
