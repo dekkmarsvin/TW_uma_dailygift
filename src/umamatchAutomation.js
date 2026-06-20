@@ -26,6 +26,9 @@ async function run(argv = process.argv.slice(2)) {
         const client = new UmamatchTaskClient({
             request: createPageRequest({ page, baseUrl: API_BASE_URL })
         });
+        const userInfo = await client.assertLoggedIn();
+        logger.info(`UMA Match API login verified for user ${userInfo.userId}.`);
+
         const result = await runUmamatchTasks({
             client,
             claim: options.claim,

@@ -4,7 +4,8 @@ const ENDPOINTS = {
     oneTime: '/api/v1/client/task/list-one-time',
     claimReward: '/api/v1/client/task/claim-reward',
     reportShare: '/api/v1/client/task/report-share',
-    userAsset: '/api/v1/client/user/asset'
+    userAsset: '/api/v1/client/user/asset',
+    userInfo: '/api/v1/client/user/info'
 };
 
 class UmamatchTaskClient {
@@ -39,6 +40,21 @@ class UmamatchTaskClient {
 
     async getUserAsset() {
         return this.getData('GET', ENDPOINTS.userAsset);
+    }
+
+    async getUserInfo() {
+        return this.getData('GET', ENDPOINTS.userInfo);
+    }
+
+    async assertLoggedIn() {
+        const info = await this.getUserInfo();
+        if (!info || info.guest === true) {
+            throw new Error('UMA Match API login check failed: guest session');
+        }
+        if (!info.userId) {
+            throw new Error('UMA Match API login check failed: missing user id');
+        }
+        return info;
     }
 
     async claimReward(taskId) {

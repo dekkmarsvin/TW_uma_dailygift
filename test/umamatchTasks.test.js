@@ -356,3 +356,29 @@ test('UmamatchTaskClient raises API errors with endpoint context', async () => {
         /\/api\/v1\/client\/task\/list-daily failed: login required \(401\)/
     );
 });
+
+test('UmamatchTaskClient reads user info for API login checks', async () => {
+    const requests = [];
+    const client = new UmamatchTaskClient({
+        request: async ({ method, path, body }) => {
+            requests.push({ method, path, body });
+            return { code: 0, data: { guest: false, userId: 'user-1', nickname: 'trainer' } };
+        }
+    });
+
+    assert.deepEqual(await client.getUserInfo(), { guest: false, userId: 'user-1', nickname: 'trainer' });
+    assert.deepEqual(requests, [
+        { method: 'GET', path: '/api/v1/client/user/info', body: undefined }
+    ]);
+});
+
+test('UmamatchTaskClient rejects guest sessions during API login check', async () => {
+    const client = new UmamatchTaskClient({
+        request: async () => ({ code: 0, data: { guest: true } })
+    });
+
+    await assert.rejects(
+        () => client.assertLoggedIn(),
+        /UMA Match API login check failed: guest session/
+    );
+});

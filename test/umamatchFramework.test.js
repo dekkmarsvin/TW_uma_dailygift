@@ -164,3 +164,40 @@ test('completeDailyShareTask falls back to task detail page when go-complete is 
         'https://uma.komoejoy.com/umamatch/events/task-detail/'
     ]);
 });
+
+test('completeDailyShareTask stops when protected task route shows login modal', async () => {
+    const page = {
+        currentUrl: 'https://uma.komoejoy.com/umamatch/events/',
+        async goto(url) {
+            this.currentUrl = url.endsWith('/task/')
+                ? 'https://uma.komoejoy.com/umamatch/events/'
+                : url;
+        },
+        url() {
+            return this.currentUrl;
+        },
+        async waitForTimeout() {},
+        async evaluate(fn) {
+            const source = String(fn);
+            if (source.includes('發送驗證碼') && source.includes('帳號密碼')) {
+                return true;
+            }
+            if (source.includes('每日分享1次拼圖交換')) {
+                return false;
+            }
+            if (source.includes('贈送') && source.includes('徵求') && source.includes('交換')) {
+                return { clicked: false, label: null };
+            }
+            throw new Error('unexpected evaluate callback');
+        }
+    };
+
+    await assert.rejects(
+        () => completeDailyShareTask({
+            page,
+            eventUrl: 'https://uma.komoejoy.com/umamatch/events/',
+            logger: { info() {}, warn() {} }
+        }),
+        /UI route guard failed/
+    );
+});

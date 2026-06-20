@@ -2,6 +2,31 @@ function taskUrl(eventUrl, path) {
     return `${eventUrl.replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
 }
 
+async function hasLoginModal(page) {
+    return page.evaluate(() => {
+        const text = String(document.body.innerText || document.body.textContent || '');
+        return text.includes('發送驗證碼') ||
+            text.includes('帳號密碼') ||
+            text.includes('註冊/登入');
+    });
+}
+
+async function assertUiRouteAvailable({ page, eventUrl, path }) {
+    const canInspectRoute = typeof page.url === 'function';
+    const currentUrl = canInspectRoute ? page.url() : '';
+    const expectedUrl = taskUrl(eventUrl, path);
+    const redirected = currentUrl && !currentUrl.startsWith(expectedUrl);
+    const loginVisible = canInspectRoute ? await hasLoginModal(page) : false;
+
+    if (redirected || loginVisible) {
+        const reason = [
+            redirected ? `redirected to ${currentUrl}` : null,
+            loginVisible ? 'login modal is visible' : null
+        ].filter(Boolean).join('; ');
+        throw new Error(`UI route guard failed for ${expectedUrl}: ${reason || 'route unavailable'}`);
+    }
+}
+
 async function clickDailyShareGoComplete(page) {
     return page.evaluate(() => {
         const isVisible = el => {
@@ -78,6 +103,7 @@ async function clickAnyShareAction(page) {
 async function completeDailyShareTask({ page, eventUrl, logger = console }) {
     await page.goto(taskUrl(eventUrl, 'task/'), { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForTimeout(2000);
+    await assertUiRouteAvailable({ page, eventUrl, path: 'task/' });
 
     const clickedGoComplete = await clickDailyShareGoComplete(page);
     if (!clickedGoComplete) {
@@ -86,6 +112,7 @@ async function completeDailyShareTask({ page, eventUrl, logger = console }) {
     }
 
     await page.waitForTimeout(2000);
+    await assertUiRouteAvailable({ page, eventUrl, path: clickedGoComplete ? 'task/' : 'task-detail/' });
     const action = await clickAnyShareAction(page);
     if (!action.clicked) {
         throw new Error('No daily share action button found (贈送/徵求/交換)');
@@ -95,7 +122,7 @@ async function completeDailyShareTask({ page, eventUrl, logger = console }) {
     logger.info(`Daily share task action clicked: ${action.label}`);
     return { completed: true, actionLabel: action.label };
 }
-
 module.exports = {
-    completeDailyShareTask
+    completeDailyShareTask,
+    assertUiRouteAvailable
 };
