@@ -5,7 +5,10 @@ const ENDPOINTS = {
     claimReward: '/api/v1/client/task/claim-reward',
     reportShare: '/api/v1/client/task/report-share',
     userAsset: '/api/v1/client/user/asset',
-    userInfo: '/api/v1/client/user/info'
+    userInfo: '/api/v1/client/user/info',
+    lotteryTickets: '/api/v1/client/asset/tickets',
+    lotteryPrizeList: '/api/v1/client/lottery/prize-list',
+    lotteryDraw: '/api/v1/client/lottery/draw'
 };
 
 class UmamatchTaskClient {
@@ -46,6 +49,14 @@ class UmamatchTaskClient {
         return this.getData('GET', ENDPOINTS.userInfo);
     }
 
+    async getLotteryTickets() {
+        return this.getData('GET', ENDPOINTS.lotteryTickets);
+    }
+
+    async getLotteryPrizeList() {
+        return this.getData('GET', ENDPOINTS.lotteryPrizeList);
+    }
+
     async assertLoggedIn() {
         const info = await this.getUserInfo();
         if (!info || info.guest === true) {
@@ -63,6 +74,10 @@ class UmamatchTaskClient {
 
     async reportShare(taskId) {
         return this.getData('POST', ENDPOINTS.reportShare, { taskId });
+    }
+
+    async drawLottery() {
+        return this.getData('POST', ENDPOINTS.lotteryDraw);
     }
 }
 

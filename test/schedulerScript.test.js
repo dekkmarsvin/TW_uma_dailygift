@@ -18,3 +18,9 @@ test('scheduler records both automation exit codes before deciding final failure
     assert.match(script, /if\s*\(\$FailedSteps\.Count\s+-gt\s+0\)/);
     assert.doesNotMatch(script, /exit\s+\$AutomationExitCode/);
 });
+
+test('scheduler keeps child process output out of automation step result objects', () => {
+    assert.match(script, /\$NodeOutput\s*=\s*&\s+node\s+\$ScriptPath\s+@Arguments\s+2>&1/);
+    assert.match(script, /foreach\s*\(\$Line\s+in\s+\$NodeOutput\)/);
+    assert.match(script, /\$Result\s*=\s*Invoke-AutomationStep\s+-Name\s+"UMA Match Tasks"/);
+});

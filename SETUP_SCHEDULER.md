@@ -193,6 +193,8 @@ node src/automation.js
 node src/umamatchAutomation.js --claim
 ```
 
+`umamatchAutomation.js` 內建落日機制。預設 `2026-06-29T04:59:00+08:00` 後會略過 4週年自訂配對大賽任務領獎，但仍會進入「兌換&抽獎」頁讀取公告時間；若頁面公告抽獎期間已開放且帳號有抽獎券，`--claim` 會自動抽到現有抽獎券用完。預設 `2026-07-06T04:59:00+08:00` 後會略過整個 umamatch 自動化並以成功狀態結束，排程會繼續保留 UMA 每日簽到流程。若官方延長活動時間，可在 `.env` 設定 `UMAMATCH_SUNSET_AT` 或 `UMAMATCH_TASK_SUNSET_AT` 覆寫。
+
 ## 📅 建議排程時間
 
 | 時間 | 優點 | 缺點 |

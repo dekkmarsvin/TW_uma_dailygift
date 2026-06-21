@@ -52,8 +52,13 @@ function Invoke-AutomationStep {
     Write-Log "Executing: node $ScriptPath $($Arguments -join ' ')"
     $StartTime = Get-Date
 
-    & node $ScriptPath @Arguments
+    $NodeOutput = & node $ScriptPath @Arguments 2>&1
     $StepExitCode = $LASTEXITCODE
+    foreach ($Line in $NodeOutput) {
+        if ($null -ne $Line -and "$Line".Length -gt 0) {
+            Write-Log "[$Name] $Line"
+        }
+    }
 
     $EndTime = Get-Date
     $Duration = ($EndTime - $StartTime).TotalSeconds

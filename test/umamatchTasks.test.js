@@ -242,6 +242,59 @@ test('runUmamatchTasks claim mode completes unfinished daily share task before c
     assert.deepEqual(result.shareCompletion, { attempted: true, completed: true, reportShare: { ok: true } });
 });
 
+test('runUmamatchTasks falls back to report-share when protected share UI is unavailable', async () => {
+    let dailyReads = 0;
+    const reportedShares = [];
+    const claimed = [];
+    const warnings = [];
+
+    const result = await runUmamatchTasks({
+        claim: true,
+        completeDailyShareTask: async () => {
+            throw new Error('UI route guard failed for task route');
+        },
+        client: {
+            async getDailyTasks() {
+                dailyReads++;
+                if (dailyReads === 1) {
+                    return [
+                        { taskId: 'uma-4-task3', title: '每日分享1次拼圖交換、徵求或贈送連結', isCompleted: false, isRewarded: false, award: { POINT: 2 } }
+                    ];
+                }
+                return [
+                    { taskId: 'uma-4-task3', title: '每日分享1次拼圖交換、徵求或贈送連結', isCompleted: true, isRewarded: false, award: { POINT: 2 } }
+                ];
+            },
+            async getMilestoneTasks() {
+                return [];
+            },
+            async getOneTimeTasks() {
+                return [];
+            },
+            async reportShare(taskId) {
+                reportedShares.push(taskId);
+                return { ok: true };
+            },
+            async claimReward(taskId) {
+                claimed.push(taskId);
+                return { ok: true };
+            }
+        },
+        logger: {
+            info() {},
+            warn(message) {
+                warnings.push(message);
+            }
+        }
+    });
+
+    assert.deepEqual(reportedShares, ['uma-4-task3']);
+    assert.deepEqual(claimed, ['uma-4-task3']);
+    assert.equal(result.shareCompletion.completed, false);
+    assert.deepEqual(result.shareCompletion.reportShare, { ok: true });
+    assert.match(warnings.join('\n'), /Daily share UI completion failed/);
+});
+
 test('runUmamatchTasks claim mode refreshes after claims and picks up newly claimable milestone rewards', async () => {
     let dailyReads = 0;
     let milestoneReads = 0;
@@ -343,6 +396,23 @@ test('UmamatchTaskClient posts taskId when reporting a share task', async () => 
             path: '/api/v1/client/task/report-share',
             body: { taskId: 'uma-4-task3' }
         }
+    ]);
+});
+
+test('UmamatchTaskClient reads lottery tickets and posts lottery draw', async () => {
+    const requests = [];
+    const client = new UmamatchTaskClient({
+        request: async ({ method, path, body }) => {
+            requests.push({ method, path, body });
+            return { code: 0, data: path.endsWith('/draw') ? { prizeId: 0 } : 2 };
+        }
+    });
+
+    assert.equal(await client.getLotteryTickets(), 2);
+    assert.deepEqual(await client.drawLottery(), { prizeId: 0 });
+    assert.deepEqual(requests, [
+        { method: 'GET', path: '/api/v1/client/asset/tickets', body: undefined },
+        { method: 'POST', path: '/api/v1/client/lottery/draw', body: undefined }
     ]);
 });
 

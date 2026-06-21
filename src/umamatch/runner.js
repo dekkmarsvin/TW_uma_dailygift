@@ -31,10 +31,16 @@ async function runUmamatchTasks({ client, claim = false, completeDailyShareTask 
     if (claim && shareTask) {
         if (typeof completeDailyShareTask === 'function') {
             logger.info(`Completing daily share task before claiming rewards: ${shareTask.title}`);
-            shareCompletion = {
-                attempted: true,
-                ...(await completeDailyShareTask(shareTask))
-            };
+            shareCompletion = { attempted: true, completed: false };
+            try {
+                shareCompletion = {
+                    ...shareCompletion,
+                    ...(await completeDailyShareTask(shareTask))
+                };
+            } catch (error) {
+                shareCompletion.error = error.message;
+                logger.warn(`Daily share UI completion failed: ${error.message}`);
+            }
             if (typeof client.reportShare === 'function') {
                 shareCompletion.reportShare = await client.reportShare(shareTask.taskId);
             }
