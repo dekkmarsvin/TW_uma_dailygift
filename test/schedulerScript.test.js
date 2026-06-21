@@ -24,3 +24,26 @@ test('scheduler keeps child process output out of automation step result objects
     assert.match(script, /foreach\s*\(\$Line\s+in\s+\$NodeOutput\)/);
     assert.match(script, /\$Result\s*=\s*Invoke-AutomationStep\s+-Name\s+"UMA Match Tasks"/);
 });
+
+test('runner exposes a setup wizard for env and Windows Task Scheduler configuration', () => {
+    assert.match(script, /param\s*\([\s\S]*\[switch\]\$Setup/);
+    assert.match(script, /function\s+Show-SetupWizard/);
+    assert.match(script, /function\s+Set-EnvFileFromUi/);
+    assert.match(script, /function\s+Register-SchedulerTaskFromUi/);
+    assert.match(script, /System\.Windows\.Forms/);
+    assert.match(script, /Microsoft\.VisualBasic/);
+    assert.match(script, /Register-ScheduledTask/);
+    assert.match(script, /New-ScheduledTaskAction/);
+    assert.match(script, /New-ScheduledTaskTrigger/);
+    assert.match(script, /New-ScheduledTaskSettingsSet/);
+});
+
+test('runner automatically launches env setup when required configuration is missing', () => {
+    assert.match(script, /\$RequiredConfigNames\s*=\s*@\("login_username",\s*"login_password",\s*"GEMINI_API_KEY"\)/);
+    assert.match(script, /function\s+Get-EffectiveConfigValue/);
+    assert.match(script, /function\s+Get-MissingRequiredConfigNames/);
+    assert.match(script, /function\s+Ensure-RequiredConfiguration/);
+    assert.match(script, /Set-EnvFileFromUi/);
+    assert.match(script, /Run \.\\run_automation\.ps1 -ConfigureEnv/);
+    assert.match(script, /Ensure-RequiredConfiguration\s*\r?\n\s*Ensure-NodeDependencies/);
+});

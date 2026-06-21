@@ -5,10 +5,29 @@
 ## 📋 前置準備
 
 1. ✅ 已完成專案安裝（參見 [README.md](README.md)）
-2. ✅ `.env` 檔案已設定完成
+2. ✅ `.env` 檔案已設定完成，或準備透過 `.\run_automation.ps1 -Setup` 引導建立
 3. ✅ 手動測試過自動化腳本可正常執行
 
 ## 🛠️ 設定步驟
+
+### 快速設定精靈
+
+根目錄唯一入口是 `run_automation.ps1`。首次設定建議直接使用 PowerShell UI 精靈：
+
+```powershell
+.\run_automation.ps1 -Setup
+```
+
+精靈會引導填寫 `.env`，並可直接註冊或更新 Windows 工作排程。若要只處理其中一段，可使用：
+
+```powershell
+.\run_automation.ps1 -ConfigureEnv
+.\run_automation.ps1 -InstallScheduler
+```
+
+正常執行 `.\run_automation.ps1` 時，如果 `.env` 或目前環境變數缺少 `login_username`、`login_password`、`GEMINI_API_KEY`，會自動開啟 `.env` 設定 UI。排程環境通常不適合跳出互動視窗，因此請先用 `.\run_automation.ps1 -ConfigureEnv` 補齊必要參數。
+
+以下手動步驟保留給需要自行調整工作排程器細節的情境。
 
 ### 步驟 1: 開啟工作排程器
 
@@ -150,10 +169,10 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 **解決方案**:
 1. 確認 Node.js 已安裝
 2. 確認環境變數 PATH 包含 Node.js 路徑
-3. 在排程「動作」中手動指定完整路徑:
+3. 仍建議執行 `run_automation.ps1`，因為它會依序執行 UMA 每日簽到與 umamatch 任務，並在兩個步驟都嘗試後才回報最終結果。若排程環境找不到 `node`，請先把 Node.js 安裝路徑加入該使用者的 PATH，或用 PowerShell 在執行前補上 PATH:
    ```
-   程式: C:\Program Files\nodejs\node.exe
-   引數: "D:\Workspace\Github\TW_uma_dailygift\src\automation.js"
+   程式或指令碼: powershell.exe
+   新增引數: -ExecutionPolicy Bypass -Command "$env:Path='C:\Program Files\nodejs;' + $env:Path; & 'D:\Workspace\Github\TW_uma_dailygift\run_automation.ps1'"
    開始於: D:\Workspace\Github\TW_uma_dailygift
    ```
 
@@ -188,9 +207,9 @@ cd D:\Workspace\Github\TW_uma_dailygift
 # 手動執行 PowerShell 腳本
 .\run_automation.ps1
 
-# 或直接執行 Node.js 腳本
-node src/automation.js
-node src/umamatchAutomation.js --claim
+# 只需要單獨診斷某個 Node.js 入口時，才使用 npm scripts
+npm run diagnostics:lottery
+npm run umamatch:dry-run
 ```
 
 `umamatchAutomation.js` 內建落日機制。預設 `2026-06-29T04:59:00+08:00` 後會略過 4週年自訂配對大賽任務領獎，但仍會進入「兌換&抽獎」頁讀取公告時間；若頁面公告抽獎期間已開放且帳號有抽獎券，`--claim` 會自動抽到現有抽獎券用完。預設 `2026-07-06T04:59:00+08:00` 後會略過整個 umamatch 自動化並以成功狀態結束，排程會繼續保留 UMA 每日簽到流程。若官方延長活動時間，可在 `.env` 設定 `UMAMATCH_SUNSET_AT` 或 `UMAMATCH_TASK_SUNSET_AT` 覆寫。

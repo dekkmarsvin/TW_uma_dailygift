@@ -14,7 +14,7 @@
 
 ## 📋 需求
 
-- **Node.js** >= 16.0.0
+- **Node.js** >= 20.0.0
 - **npm** >= 7.0.0
 - **Windows** OS (for notifications)
 - **Google Gemini API Key** ([申請連結](https://aistudio.google.com/app/apikey))
@@ -24,7 +24,7 @@
 ### 1. Clone 專案
 
 ```bash
-git clone https://github.com/your-username/TW_uma_dailygift.git
+git clone https://github.com/dekkmarsvin/TW_uma_dailygift.git
 cd TW_uma_dailygift
 ```
 
@@ -37,7 +37,13 @@ npx playwright install
 
 ### 3. 設定環境變數
 
-複製 `.env.example` 為 `.env`：
+建議使用根目錄唯一入口的設定精靈：
+
+```powershell
+.\run_automation.ps1 -ConfigureEnv
+```
+
+若要手動設定，也可以複製 `.env.example` 為 `.env`：
 
 ```bash
 copy .env.example .env
@@ -49,7 +55,7 @@ copy .env.example .env
 login_username=your_email@example.com
 login_password=your_password_here
 GEMINI_API_KEY=your_gemini_api_key_here
-model=gemini-1.5-flash
+model=gemini-3-flash-preview
 ```
 
 **重要**: 請確保 `.env` 檔案安全，不要提交至 Git！
@@ -63,10 +69,22 @@ model=gemini-1.5-flash
 
 ## 💻 使用方式
 
+專案根目錄的唯一入口是 `run_automation.ps1`。日常手動執行、Windows 工作排程，以及首次設定精靈都從這個檔案進入。
+
+### 首次設定
+
+```powershell
+.\run_automation.ps1 -Setup
+```
+
+此精靈會使用 PowerShell UI 引導建立或更新 `.env`，並可註冊 Windows 工作排程。若只要設定其中一段，可使用 `.\run_automation.ps1 -ConfigureEnv` 或 `.\run_automation.ps1 -InstallScheduler`。
+
+正常執行 `.\run_automation.ps1` 時，如果 `.env` 或目前環境變數缺少 `login_username`、`login_password`、`GEMINI_API_KEY`，會自動開啟 `.env` 設定 UI。非互動排程環境缺值時會停止並提示先執行 `.\run_automation.ps1 -ConfigureEnv`。
+
 ### 手動執行
 
-```bash
-node src/automation.js
+```powershell
+.\run_automation.ps1
 ```
 
 ### Windows 排程執行
@@ -141,13 +159,20 @@ TW_uma_dailygift/
 │   ├── domain/
 │   │   ├── checkIn.js         # 簽到狀態解析
 │   │   └── lottery.js         # 積分、獎品庫存、抽獎規則
+│   ├── umamatch/              # 4週年自訂配對大賽任務、抽獎與落日策略
 │   ├── automation.js          # 主要自動化流程
+│   ├── umamatchAutomation.js  # 4週年自訂配對大賽自動化入口
 │   ├── config.js              # 設定檔
 │   ├── logger.js              # 日誌系統
 │   └── dailySummaryLogger.js  # 每日摘要日誌
+├── scripts/
+│   ├── test_lottery_feature.js # 手動抽獎頁面診斷
+│   └── test_notification.js    # 手動 Windows 通知診斷
 ├── test/
 │   ├── checkIn.test.js        # 簽到解析單元測試
-│   └── lottery.test.js        # 抽獎規則單元測試
+│   ├── lottery.test.js        # 抽獎規則單元測試
+│   ├── schedulerScript.test.js # 排程腳本契約測試
+│   └── umamatch*.test.js      # umamatch 任務、抽獎與落日策略測試
 ├── logs/
 │   ├── activity.log           # 技術日誌
 │   ├── daily-summary.log      # 每日摘要
@@ -220,10 +245,10 @@ npm run umamatch:dry-run
 npm run umamatch:claim
 
 # 測試通知系統
-node test_notification.js
+npm run diagnostics:notification
 
 # 測試抽獎功能
-node test_lottery_feature.js
+npm run diagnostics:lottery
 ```
 
 ## 4週年自訂配對大賽任務

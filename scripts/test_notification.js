@@ -1,18 +1,14 @@
 /**
- * Test Windows Notification System
- * This script tests the Windows notification function
+ * Test Windows Notification System.
  */
 
 const { execSync } = require('child_process');
 
 function sendWindowsNotification(title, message, type = 'warning') {
     try {
-        // Escape single quotes for PowerShell
         const escapedTitle = title.replace(/'/g, "''");
         const escapedMessage = message.replace(/'/g, "''");
-
         const iconType = type === 'error' ? 'Error' : 'Warning';
-
         const script = `Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('${escapedMessage}', '${escapedTitle}', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::${iconType})`;
 
         execSync(`powershell -Command "${script}"`, {
@@ -21,9 +17,9 @@ function sendWindowsNotification(title, message, type = 'warning') {
             stdio: 'inherit'
         });
 
-        console.log(`✅ Notification sent: ${title}`);
+        console.log(`Notification sent: ${title}`);
     } catch (err) {
-        console.error('❌ Failed to send notification:', err.message);
+        console.error('Failed to send notification:', err.message);
     }
 }
 
@@ -52,6 +48,6 @@ setTimeout(() => {
 
     console.log();
     console.log('='.repeat(60));
-    console.log('Test complete!');
+    console.log('Test complete.');
     console.log('='.repeat(60));
 }, 2000);

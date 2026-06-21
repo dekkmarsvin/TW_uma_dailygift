@@ -2,7 +2,7 @@
 
 ## Scope
 
-This plan covers the current UMA daily gift domain:
+This plan covers the current UMA daily gift and umamatch automation domains:
 
 - Login with saved cookies, with password login fallback.
 - CAPTCHA solving and manual fallback.
@@ -13,12 +13,18 @@ This plan covers the current UMA daily gift domain:
 - Lottery result capture.
 - Windows notification on intervention or failure.
 - Activity log and daily summary log output.
+- Windows scheduler wrapper behavior for running dailygift and umamatch as separate steps.
+- Single root entrypoint enforcement: `run_automation.ps1` is the only executable script file in the project root.
+- PowerShell setup wizard behavior for `.env` creation and Windows Task Scheduler registration.
+- Automatic `.env` setup trigger when neither `.env` nor process environment variables provide required configuration.
+- 4週年自訂配對大賽 task discovery, daily share completion, reward claiming, lottery window parsing, ticket drawing, and sunset behavior.
 
 ## Current Coverage
 
-- `npm test` runs fast unit tests for check-in parsing, points parsing, prize stock parsing, lottery decision rules, and lottery result parsing.
-- `test_lottery_feature.js` performs a live website check for login state, points, prize stock, lottery button presence, and draw eligibility using the same UMA Page Adapter as production.
-- `test_notification.js` manually exercises Windows MessageBox notifications.
+- `npm test` runs fast unit tests for check-in parsing, points parsing, prize stock parsing, lottery decision rules, lottery result parsing, root entrypoint enforcement, scheduler wrapper/setup behavior, umamatch task policy/client/runner behavior, umamatch lottery behavior, sunset policy, and documentation guidance.
+- `npm run diagnostics:lottery` performs a live website check for login state, points, prize stock, lottery button presence, and draw eligibility using the same UMA Page Adapter as production.
+- `npm run umamatch:dry-run` performs a read-only live umamatch state check using the saved KOMOE cookies without completing tasks, claiming rewards, or drawing lottery tickets.
+- `npm run diagnostics:notification` manually exercises Windows MessageBox notifications.
 
 ## Required Test Layers
 
@@ -44,10 +50,27 @@ Run with `npm test`.
   - Reads no-win text.
   - Reads winning result patterns.
   - Ignores check-in reward text.
+- Scheduler wrapper (`test/schedulerScript.test.js`):
+  - Runs dailygift and umamatch as separate automation steps.
+  - Records both exit codes before deciding the final failure state.
+  - Keeps child process output out of automation step result objects.
+  - Exposes `-Setup`, `-ConfigureEnv`, and `-InstallScheduler` paths that use PowerShell UI prompts for `.env` and Scheduled Tasks setup.
+  - Auto-launches `.env` setup when `login_username`, `login_password`, or `GEMINI_API_KEY` is missing from both `.env` and process environment variables.
+- Root entrypoint (`test/rootEntrypoint.test.js`):
+  - Keeps `run_automation.ps1` as the only executable script file in the repository root.
+  - Requires manual diagnostics to live under `scripts/` instead of root-level executable files.
+- Umamatch automation:
+  - `test/umamatchFramework.test.js` covers cookie loading, browser page requests, CLI parsing, and daily share completion.
+  - `test/umamatchTasks.test.js` covers task eligibility, section summaries, task API endpoints, reward claiming, report-share fallback, and multi-round claim refresh.
+  - `test/umamatchLottery.test.js` covers lottery window parsing, ticket reads, dry-run behavior, and draw loops.
+  - `test/umamatchSunsetPolicy.test.js` covers default and environment-overridden sunset cutoffs.
+  - `test/umamatchAutomation.test.js` covers overall orchestration when task or full umamatch sunset has been reached.
+- Documentation guidance (`test/documentationGuidance.test.js`):
+  - Keeps README runtime requirements, clone URL, `.env.example` model, package metadata, scheduler guidance, test plan, and GitHub Actions aligned with the current codebase.
 
 ### Live Smoke
 
-Run manually with `node test_lottery_feature.js`.
+Run manually with `npm run diagnostics:lottery`.
 
 - Loads saved cookies.
 - Opens the UMA daily gift page.
@@ -57,9 +80,17 @@ Run manually with `node test_lottery_feature.js`.
 - Confirms whether the lottery button is present and visible.
 - Reports whether the current page state would draw.
 
+Run manually with `npm run umamatch:dry-run`.
+
+- Loads saved KOMOE cookies from `cookies.json`.
+- Opens the umamatch event page for authenticated browser context.
+- Reads daily, milestone, and one-time task sections from the task APIs.
+- Reports currently claimable rewards without calling claim APIs.
+- Reads the published lottery window and ticket state without drawing.
+
 ### Manual
 
-Run manually with `node test_notification.js`.
+Run manually with `npm run diagnostics:notification`.
 
 - Shows warning notification.
 - Shows error notification.

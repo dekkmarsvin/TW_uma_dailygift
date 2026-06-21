@@ -1,17 +1,22 @@
 {
   "name": "tw_uma_dailygift",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Automation for UMA daily gift check-in and limited-time umamatch rewards.",
+  "main": "src/automation.js",
   "scripts": {
     "test": "node --test",
     "umamatch:dry-run": "node src/umamatchAutomation.js --dry-run",
-    "umamatch:claim": "node src/umamatchAutomation.js --claim"
+    "umamatch:claim": "node src/umamatchAutomation.js --claim",
+    "diagnostics:lottery": "node scripts/test_lottery_feature.js",
+    "diagnostics:notification": "node scripts/test_notification.js"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "type": "commonjs",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "dependencies": {
     "@google/genai": "^1.39.0",
     "dotenv": "^17.2.3",
