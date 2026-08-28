@@ -13,7 +13,7 @@ This plan covers the current UMA daily gift and umamatch automation domains:
 - Lottery result capture.
 - Windows notification on intervention or failure.
 - Activity log and daily summary log output.
-- Windows scheduler wrapper behavior for running dailygift and umamatch as separate steps.
+- Windows scheduler wrapper behavior for running the dailygift step (umamatch is past its sunset and is no longer scheduled).
 - Single root entrypoint enforcement: `run_automation.ps1` is the only executable script file in the project root.
 - PowerShell setup wizard behavior for `.env` creation and Windows Task Scheduler registration.
 - Automatic `.env` setup trigger when neither `.env` nor process environment variables provide required configuration.
@@ -51,8 +51,8 @@ Run with `npm test`.
   - Reads winning result patterns.
   - Ignores check-in reward text.
 - Scheduler wrapper (`test/schedulerScript.test.js`):
-  - Runs dailygift and umamatch as separate automation steps.
-  - Records both exit codes before deciding the final failure state.
+  - Runs the dailygift automation step and no longer spawns the sunset umamatch step.
+  - Accumulates step exit codes before deciding the final failure state.
   - Keeps child process output out of automation step result objects.
   - Exposes `-Setup`, `-ConfigureEnv`, and `-InstallScheduler` paths that use PowerShell UI prompts for `.env` and Scheduled Tasks setup.
   - Auto-launches `.env` setup when `login_username`, `login_password`, or `GEMINI_API_KEY` is missing from both `.env` and process environment variables.

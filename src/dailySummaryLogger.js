@@ -95,7 +95,13 @@ class DailySummaryLogger {
             return;
         }
 
-        const dateStr = this.session.date.toISOString().split('T')[0]; // YYYY-MM-DD
+        // 使用本地日期；toISOString() 是 UTC，台北時間 00:00-08:00 執行會寫成前一天。
+        const sessionDate = this.session.date;
+        const dateStr = [
+            sessionDate.getFullYear(),
+            String(sessionDate.getMonth() + 1).padStart(2, '0'),
+            String(sessionDate.getDate()).padStart(2, '0')
+        ].join('-'); // YYYY-MM-DD
         const separator = '='.repeat(52);
 
         let logEntry = `\n${separator}\n`;

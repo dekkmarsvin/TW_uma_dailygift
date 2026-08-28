@@ -7,8 +7,13 @@ const logger = require('./logger');
 const DailySummaryLogger = require('./dailySummaryLogger');
 const UmaPageAdapter = require('./adapters/umaPageAdapter');
 const { getLotteryDecision } = require('./domain/lottery');
+const { keepSessionCookies } = require('./core/cookieStore');
 
 const COOKIE_PATH = path.join(__dirname, '../cookies.json');
+
+function toPowerShellLiteral(value) {
+    return `'${String(value).replace(/'/g, "''")}'`;
+}
 
 /**
  * Send Windows notification using MessageBox
@@ -18,16 +23,20 @@ const COOKIE_PATH = path.join(__dirname, '../cookies.json');
  */
 function sendWindowsNotification(title, message, type = 'warning') {
     try {
-        // Escape single quotes for PowerShell
-        const escapedTitle = title.replace(/'/g, "''");
-        const escapedMessage = message.replace(/'/g, "''");
-
         const iconType = type === 'error' ? 'Error' : 'Warning';
 
-        const script = `Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('${escapedMessage}', '${escapedTitle}', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::${iconType})`;
+        const script = [
+            'Add-Type -AssemblyName System.Windows.Forms;',
+            `[System.Windows.Forms.MessageBox]::Show(${toPowerShellLiteral(message)}, ${toPowerShellLiteral(title)},`,
+            '[System.Windows.Forms.MessageBoxButtons]::OK,',
+            `[System.Windows.Forms.MessageBoxIcon]::${iconType}) | Out-Null`
+        ].join(' ');
+
+        // 以 -EncodedCommand 傳遞，避免訊息中的引號、$ 或換行破壞命令列。
+        const encodedScript = Buffer.from(script, 'utf16le').toString('base64');
 
         // Use Start-Process to avoid blocking
-        execSync(`powershell -Command "Start-Process powershell -ArgumentList '-Command', \\"${script}\\" -WindowStyle Hidden"`, {
+        execSync(`powershell -NoProfile -Command "Start-Process powershell -WindowStyle Hidden -ArgumentList '-NoProfile','-EncodedCommand','${encodedScript}'"`, {
             timeout: 5000,
             windowsHide: true
         });
@@ -40,7 +49,7 @@ function sendWindowsNotification(title, message, type = 'warning') {
 
 
 async function saveCookies(context) {
-    const cookies = await context.cookies();
+    const cookies = keepSessionCookies(await context.cookies());
     fs.writeFileSync(COOKIE_PATH, JSON.stringify(cookies, null, 2));
     logger.info('Cookies saved to file.');
 }
@@ -571,8 +580,15 @@ async function run() {
                 summaryLog.logCheckIn('Error', checkinStatus.daysChecked, null, 'Daily Bonus', e.message);
             }
         } else {
-            logger.warn('⚠️ Could not determine check-in status. Check manually.');
+            // 既沒有已簽到的樣式，也找不到簽到按鈕 — 當日簽到可能漏掉，不能靜默帶過。
+            logger.error('❌ Check-in button not found and no checked-in state detected. The check-in for today may have been missed.');
             summaryLog.logCheckIn('Unknown', checkinStatus.daysChecked, null, null, 'Could not determine status');
+            sendWindowsNotification(
+                'UMA 每日禮物 - 簽到狀態不明',
+                '找不到簽到按鈕，也無法確認已簽到。請手動檢查今日簽到。',
+                'error'
+            );
+            process.exitCode = 1;
         }
 
         const closedRewardPopup = await umaPage.closeRewardPopupIfVisible();
@@ -638,6 +654,13 @@ async function run() {
                     const lotteryPromptConfirmed = await umaPage.confirmLotteryPromptIfVisible();
                     if (lotteryPromptConfirmed) {
                         logger.info('✅ Lottery confirmation prompt accepted.');
+                    } else {
+                        logger.warn('⚠️ Lottery confirmation control not found. Nothing was clicked - verify the draw manually.');
+                        sendWindowsNotification(
+                            'UMA 每日禮物 - 抽獎需確認',
+                            '找不到抽獎確認按鈕，已停止動作以免誤觸。請手動確認抽獎是否完成。',
+                            'warning'
+                        );
                     }
 
                     // Wait for lottery result

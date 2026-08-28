@@ -61,13 +61,13 @@
    - **程式或指令碼**: `powershell.exe`
    - **新增引數**: 
      ```
-     -ExecutionPolicy Bypass -File "D:\Workspace\Github\TW_uma_dailygift\run_automation.ps1"
+     -ExecutionPolicy Bypass -File "C:\path\to\TW_uma_dailygift\run_automation.ps1"
      ```
      ⚠️ **請將路徑改為您的實際專案路徑**
    
    - **開始於**: 
      ```
-     D:\Workspace\Github\TW_uma_dailygift
+     C:\path\to\TW_uma_dailygift
      ```
      ⚠️ **請將路徑改為您的實際專案路徑**
 
@@ -169,11 +169,11 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 **解決方案**:
 1. 確認 Node.js 已安裝
 2. 確認環境變數 PATH 包含 Node.js 路徑
-3. 仍建議執行 `run_automation.ps1`，因為它會依序執行 UMA 每日簽到與 umamatch 任務，並在兩個步驟都嘗試後才回報最終結果。若排程環境找不到 `node`，請先把 Node.js 安裝路徑加入該使用者的 PATH，或用 PowerShell 在執行前補上 PATH:
+3. 仍建議執行 `run_automation.ps1`，因為它會處理設定檢查、依賴安裝與統一的執行記錄。（umamatch 已於 2026-07-06 落日，每日排程不再啟動該步驟；若官方延長活動，可以 `npm run umamatch:claim` 手動執行。）若排程環境找不到 `node`，請先把 Node.js 安裝路徑加入該使用者的 PATH，或用 PowerShell 在執行前補上 PATH:
    ```
    程式或指令碼: powershell.exe
-   新增引數: -ExecutionPolicy Bypass -Command "$env:Path='C:\Program Files\nodejs;' + $env:Path; & 'D:\Workspace\Github\TW_uma_dailygift\run_automation.ps1'"
-   開始於: D:\Workspace\Github\TW_uma_dailygift
+   新增引數: -ExecutionPolicy Bypass -Command "$env:Path='C:\Program Files\nodejs;' + $env:Path; & 'C:\path\to\TW_uma_dailygift\run_automation.ps1'"
+   開始於: C:\path\to\TW_uma_dailygift
    ```
 
 ### 問題 4: 權限不足
@@ -202,7 +202,7 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 ```powershell
 # 切換至專案目錄
-cd D:\Workspace\Github\TW_uma_dailygift
+cd C:\path\to\TW_uma_dailygift
 
 # 手動執行 PowerShell 腳本
 .\run_automation.ps1

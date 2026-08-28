@@ -325,61 +325,9 @@ class UmaPageAdapter {
             return true;
         }
 
-        await this.page.waitForTimeout(2500);
-
-        const confirmPoint = await this.page.evaluate(() => {
-            const isVisible = (el) => {
-                const rect = el.getBoundingClientRect();
-                const style = window.getComputedStyle(el);
-                return rect.width > 0 &&
-                    rect.height > 0 &&
-                    style.visibility !== 'hidden' &&
-                    style.display !== 'none' &&
-                    style.opacity !== '0';
-            };
-
-            const dialogs = Array.from(document.querySelectorAll('div, section, article'))
-                .filter(el => {
-                    if (!isVisible(el)) return false;
-                    const rect = el.getBoundingClientRect();
-                    return rect.width >= 250 &&
-                        rect.width <= Math.min(window.innerWidth * 0.9, 900) &&
-                        rect.height >= 120 &&
-                        rect.height <= Math.min(window.innerHeight * 0.8, 700) &&
-                        rect.top >= 0 &&
-                        rect.left >= 0 &&
-                        rect.top < window.innerHeight &&
-                        rect.left < window.innerWidth;
-                })
-                .sort((a, b) => {
-                    const ar = a.getBoundingClientRect();
-                    const br = b.getBoundingClientRect();
-                    return (ar.width * ar.height) - (br.width * br.height);
-                });
-
-            const dialog = dialogs[0];
-            if (!dialog) return null;
-
-            const rect = dialog.getBoundingClientRect();
-            return {
-                x: rect.left + rect.width * 0.35,
-                y: rect.top + rect.height * 0.72
-            };
-        });
-
-        if (confirmPoint) {
-            await this.page.mouse.click(confirmPoint.x, confirmPoint.y);
-            await this.page.waitForTimeout(1000);
-            return true;
-        }
-
-        const viewport = this.page.viewportSize();
-        if (viewport) {
-            await this.page.mouse.click(viewport.width * 0.43, viewport.height * 0.59);
-            await this.page.waitForTimeout(1000);
-            return true;
-        }
-
+        // 沒有找到明確的確認控制項時不做任何點擊。
+        // 這條路徑會消耗積分，盲目點擊座標可能誤觸其他元素。
+        this.logger.warn('Lottery confirmation control not found; skipping blind click.');
         return false;
     }
 

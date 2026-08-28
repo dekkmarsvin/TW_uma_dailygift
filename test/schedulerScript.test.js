@@ -5,14 +5,14 @@ const path = require('path');
 
 const script = fs.readFileSync(path.join(__dirname, '../run_automation.ps1'), 'utf8');
 
-test('scheduler runs dailygift and umamatch as separate automation steps', () => {
+test('scheduler runs the daily gift automation and no longer spawns the sunset umamatch step', () => {
     assert.match(script, /Invoke-AutomationStep\s+-Name\s+"UMA Daily Gift"/);
-    assert.match(script, /Invoke-AutomationStep\s+-Name\s+"UMA Match Tasks"/);
     assert.match(script, /-ScriptPath\s+"src\/automation\.js"/);
-    assert.match(script, /-ScriptPath\s+"src\/umamatchAutomation\.js"\s+-Arguments\s+@\("--claim"\)/);
+    assert.doesNotMatch(script, /Invoke-AutomationStep\s+-Name\s+"UMA Match Tasks"/);
+    assert.doesNotMatch(script, /-ScriptPath\s+"src\/umamatchAutomation\.js"/);
 });
 
-test('scheduler records both automation exit codes before deciding final failure', () => {
+test('scheduler accumulates automation exit codes before deciding final failure', () => {
     assert.match(script, /\$FailedSteps\s*=\s*@\(\)/);
     assert.match(script, /\$FailedSteps\s*\+=\s*\$Result/);
     assert.match(script, /if\s*\(\$FailedSteps\.Count\s+-gt\s+0\)/);
@@ -22,7 +22,7 @@ test('scheduler records both automation exit codes before deciding final failure
 test('scheduler keeps child process output out of automation step result objects', () => {
     assert.match(script, /\$NodeOutput\s*=\s*&\s+node\s+\$ScriptPath\s+@Arguments\s+2>&1/);
     assert.match(script, /foreach\s*\(\$Line\s+in\s+\$NodeOutput\)/);
-    assert.match(script, /\$Result\s*=\s*Invoke-AutomationStep\s+-Name\s+"UMA Match Tasks"/);
+    assert.match(script, /\$Result\s*=\s*Invoke-AutomationStep\s+-Name\s+"UMA Daily Gift"/);
 });
 
 test('runner exposes a setup wizard for env and Windows Task Scheduler configuration', () => {
@@ -46,4 +46,10 @@ test('runner automatically launches env setup when required configuration is mis
     assert.match(script, /Set-EnvFileFromUi/);
     assert.match(script, /Run \.\\run_automation\.ps1 -ConfigureEnv/);
     assert.match(script, /Ensure-RequiredConfiguration\s*\r?\n\s*Ensure-NodeDependencies/);
+});
+
+test('scheduler shows its error dialog in a separate process so the task cannot hang', () => {
+    assert.ok(script.includes("Start-Process powershell -WindowStyle Hidden -ArgumentList '-NoProfile', '-EncodedCommand', $EncodedNotify"));
+    assert.ok(script.includes('[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($NotifyScript))'));
+    assert.ok(!script.includes('"自動化執行失敗: $_",'));
 });

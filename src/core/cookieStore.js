@@ -17,13 +17,23 @@ async function loadCookies({ context, cookiePath, logger = console }) {
     }
 }
 
+// 只保留目標站台的 cookie；context.cookies() 會連第三方追蹤 cookie 一併回傳。
+const SESSION_COOKIE_DOMAIN = 'komoejoy.com';
+
+function keepSessionCookies(cookies) {
+    return (Array.isArray(cookies) ? cookies : [])
+        .filter(cookie => String(cookie && cookie.domain || '').includes(SESSION_COOKIE_DOMAIN));
+}
+
 async function saveCookies({ context, cookiePath, logger = console }) {
-    const cookies = await context.cookies();
+    const cookies = keepSessionCookies(await context.cookies());
     fs.writeFileSync(cookiePath, JSON.stringify(cookies, null, 2));
     logger.info(`Cookies saved to ${cookiePath}`);
 }
 
 module.exports = {
+    SESSION_COOKIE_DOMAIN,
+    keepSessionCookies,
     loadCookies,
     saveCookies
 };

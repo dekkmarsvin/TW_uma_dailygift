@@ -425,10 +425,8 @@ try {
         $FailedSteps += $Result
     }
 
-    $Result = Invoke-AutomationStep -Name "UMA Match Tasks" -ScriptPath "src/umamatchAutomation.js" -Arguments @("--claim")
-    if ($Result.ExitCode -ne 0) {
-        $FailedSteps += $Result
-    }
+    # UMA Match 已於 UMAMATCH_SUNSET_AT (2026-07-06) 結束，每日排程不再啟動該步驟。
+    # 若未來重新開放，可以 npm run umamatch:dry-run / umamatch:claim 手動執行。
 
     if ($FailedSteps.Count -gt 0) {
         $FailedNames = ($FailedSteps | ForEach-Object { "$($_.Name) (exit $($_.ExitCode))" }) -join ", "
@@ -441,15 +439,13 @@ try {
     Write-Log "❌ ERROR: $_"
     Write-Log "Stack trace: $($_.ScriptStackTrace)"
     
-    # Optional: Send Windows notification on error
+    # Optional: Send Windows notification on error.
+    # 以獨立行程顯示；阻塞式對話方塊會讓排程工作一直停在 Running 狀態。
     try {
-        Add-Type -AssemblyName System.Windows.Forms
-        [System.Windows.Forms.MessageBox]::Show(
-            "自動化執行失敗: $_",
-            "UMA 每日禮物 - 排程錯誤",
-            [System.Windows.Forms.MessageBoxButtons]::OK,
-            [System.Windows.Forms.MessageBoxIcon]::Error
-        ) | Out-Null
+        $NotifyText = ("自動化執行失敗: $_") -replace "'", "''"
+        $NotifyScript = "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('$NotifyText', 'UMA 每日禮物 - 排程錯誤', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null"
+        $EncodedNotify = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($NotifyScript))
+        Start-Process powershell -WindowStyle Hidden -ArgumentList '-NoProfile', '-EncodedCommand', $EncodedNotify | Out-Null
     } catch {
         Write-Log "Failed to send error notification"
     }

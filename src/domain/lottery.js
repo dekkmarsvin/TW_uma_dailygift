@@ -82,7 +82,9 @@ function parsePoints(snapshot = {}) {
 
     currentYear = currentYear !== null ? currentYear : 0;
     expiring = expiring !== null ? expiring : 0;
-    total = total !== null ? total : currentYear + expiring;
+    // 「即將過期積分」是「本年度積分」的子集，不是另一筆餘額。
+    // 頁面未提供總積分欄位時，可用餘額就等於本年度積分；相加會重複計算。
+    total = total !== null ? total : currentYear;
 
     return {
         currentYear,

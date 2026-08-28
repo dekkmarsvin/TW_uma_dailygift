@@ -8,7 +8,7 @@ const {
     parseLotteryResult
 } = require('../src/domain/lottery');
 
-test('parsePoints reads visible point labels and computes total', () => {
+test('parsePoints treats expiring points as a subset of the current year balance', () => {
     const points = parsePoints({
         textItems: [
             '本年度積分：60',
@@ -19,7 +19,7 @@ test('parsePoints reads visible point labels and computes total', () => {
 
     assert.equal(points.currentYear, 60);
     assert.equal(points.expiring, 45);
-    assert.equal(points.total, 105);
+    assert.equal(points.total, 60);
 });
 
 test('parsePoints falls back to body text and preserves explicit total', () => {

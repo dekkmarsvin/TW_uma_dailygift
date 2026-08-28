@@ -31,7 +31,8 @@ desktop.ini
 
 # Screenshots (may contain sensitive data)
 *.png
-!goal/*.png  # Keep goal images for documentation
+# Keep goal images for documentation
+!goal/*.png
 
 # Coverage
 coverage/
