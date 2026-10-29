@@ -20,7 +20,7 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "@google/genai": "^1.39.0",
+    "@google/genai": "^1.52.0",
     "dotenv": "^17.2.3",
     "playwright": "^1.58.1",
     "winston": "^3.19.0"
