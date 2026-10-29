@@ -651,16 +651,20 @@ async function run() {
                 if (lotteryClick.clicked) {
                     logger.info(`✅ Lottery button clicked: ${lotteryClick.targetSelector}`);
 
-                    const lotteryPromptConfirmed = await umaPage.confirmLotteryPromptIfVisible();
-                    if (lotteryPromptConfirmed) {
+                    const lotteryPrompt = await umaPage.confirmLotteryPromptIfVisible();
+                    let lotteryNeedsVerification = false;
+                    if (lotteryPrompt.confirmed) {
                         logger.info('✅ Lottery confirmation prompt accepted.');
-                    } else {
-                        logger.warn('⚠️ Lottery confirmation control not found. Nothing was clicked - verify the draw manually.');
+                    } else if (lotteryPrompt.promptDetected) {
+                        lotteryNeedsVerification = true;
+                        logger.warn('⚠️ Lottery confirmation dialog appeared but no confirm control was found. Nothing was clicked - verify the draw manually.');
                         sendWindowsNotification(
                             'UMA 每日禮物 - 抽獎需確認',
                             '找不到抽獎確認按鈕，已停止動作以免誤觸。請手動確認抽獎是否完成。',
                             'warning'
                         );
+                    } else {
+                        logger.info('No lottery confirmation prompt appeared; the draw completed with a single click.');
                     }
 
                     // Wait for lottery result
@@ -674,7 +678,12 @@ async function run() {
                     const resultMsg = finalResult || 'Lottery drawn - check manually for result';
 
                     logger.info(`🎁 Lottery Result: ${resultMsg}`);
-                    summaryLog.logLottery('Success', resultMsg);
+                    summaryLog.logLottery(
+                        lotteryNeedsVerification ? 'Needs verification' : 'Success',
+                        lotteryNeedsVerification
+                            ? '確認按鈕未找到，抽獎可能未完成。頁面顯示：' + resultMsg
+                            : resultMsg
+                    );
 
                     // Take screenshot of result
                     try {

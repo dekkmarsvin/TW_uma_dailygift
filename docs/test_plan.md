@@ -25,6 +25,8 @@ This plan covers the current UMA daily gift and umamatch automation domains:
 - `npm run diagnostics:lottery` performs a live website check for login state, points, prize stock, lottery button presence, and draw eligibility using the same UMA Page Adapter as production.
 - `npm run umamatch:dry-run` performs a read-only live umamatch state check using the saved KOMOE cookies without completing tasks, claiming rewards, or drawing lottery tickets.
 - `npm run diagnostics:notification` manually exercises Windows MessageBox notifications.
+- `npm run island:dry-run` reads island state using the saved KOMOE session and blocks activity writes, including the page's automatic login task report.
+- `test/island.test.js` covers the event window, dry-run inaction, the full claim run with its repeat being a no-op, and stopping without retry when progress is unverified.
 
 ## Required Test Layers
 
@@ -51,7 +53,7 @@ Run with `npm test`.
   - Reads winning result patterns.
   - Ignores check-in reward text.
 - Scheduler wrapper (`test/schedulerScript.test.js`):
-  - Runs the dailygift automation step and no longer spawns the sunset umamatch step.
+  - Runs dailygift followed by island automation and no longer spawns the sunset umamatch step.
   - Accumulates step exit codes before deciding the final failure state.
   - Keeps child process output out of automation step result objects.
   - Exposes `-Setup`, `-ConfigureEnv`, and `-InstallScheduler` paths that use PowerShell UI prompts for `.env` and Scheduled Tasks setup.

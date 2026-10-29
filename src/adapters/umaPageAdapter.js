@@ -5,6 +5,15 @@ const {
     parseLotteryResult
 } = require('../domain/lottery');
 
+// 抽獎確認視窗最多等這麼久。逾時視為「這次沒有確認視窗」，而不是錯誤。
+const CONFIRM_PROMPT_TIMEOUT_MS = 5000;
+
+function isTimeoutError(error) {
+    if (!error) return false;
+    if (error.name === 'TimeoutError') return true;
+    return /timeout/i.test(error.message || '');
+}
+
 class UmaPageAdapter {
     constructor(page, logger = console) {
         this.page = page;
@@ -260,16 +269,18 @@ class UmaPageAdapter {
     async confirmLotteryPromptIfVisible() {
         try {
             const confirmImage = this.page.locator('.popup-fixed img.btns1').first();
-            if (await confirmImage.isVisible({ timeout: 15000 })) {
-                await confirmImage.click({ timeout: 5000 });
-                await this.page.waitForTimeout(1000);
-                return true;
-            }
+            await confirmImage.waitFor({ state: 'visible', timeout: CONFIRM_PROMPT_TIMEOUT_MS });
+            await confirmImage.click({ timeout: 5000 });
+            await this.page.waitForTimeout(1000);
+            return { confirmed: true, promptDetected: true };
         } catch (error) {
-            this.logger.warn('Lottery confirmation image click failed: ' + error.message);
+            // 逾時代表這次抽獎沒有跳出確認視窗（單擊即開獎），屬於正常情況。
+            if (!isTimeoutError(error)) {
+                this.logger.warn('Lottery confirmation image click failed: ' + error.message);
+            }
         }
 
-        const clickedConfirm = await this.page.evaluate(() => {
+        const domScan = await this.page.evaluate(() => {
             const isVisible = (el) => {
                 const rect = el.getBoundingClientRect();
                 const style = window.getComputedStyle(el);
@@ -298,7 +309,7 @@ class UmaPageAdapter {
                 });
 
             const dialog = dialogs[0];
-            if (!dialog) return false;
+            if (!dialog) return { dialogFound: false, confirmed: false };
 
             const candidates = Array.from(dialog.querySelectorAll('button, div, span, a, img'));
             for (const el of candidates) {
@@ -313,22 +324,27 @@ class UmaPageAdapter {
                 const className = typeof el.className === 'string' ? el.className : '';
                 if ((text.includes('確認') || className.includes('confirm')) && !text.includes('取消')) {
                     el.click();
-                    return true;
+                    return { dialogFound: true, confirmed: true };
                 }
             }
 
-            return false;
+            return { dialogFound: true, confirmed: false };
         });
 
-        if (clickedConfirm) {
+        if (domScan.confirmed) {
             await this.page.waitForTimeout(1000);
-            return true;
+            return { confirmed: true, promptDetected: true };
         }
 
-        // 沒有找到明確的確認控制項時不做任何點擊。
-        // 這條路徑會消耗積分，盲目點擊座標可能誤觸其他元素。
-        this.logger.warn('Lottery confirmation control not found; skipping blind click.');
-        return false;
+        if (domScan.dialogFound) {
+            // 確認視窗存在，卻找不到明確的確認控制項時不做任何點擊。
+            // 這條路徑會消耗積分，盲目點擊座標可能誤觸其他元素。
+            this.logger.warn('Lottery confirmation dialog is present but no confirm control was found; skipping blind click.');
+            return { confirmed: false, promptDetected: true };
+        }
+
+        // 完全沒有確認視窗，代表這次抽獎單擊即完成，不需要額外確認。
+        return { confirmed: false, promptDetected: false };
     }
 
     async readLotteryResult() {

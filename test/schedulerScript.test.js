@@ -12,6 +12,13 @@ test('scheduler runs the daily gift automation and no longer spawns the sunset u
     assert.doesNotMatch(script, /-ScriptPath\s+"src\/umamatchAutomation\.js"/);
 });
 
+test('scheduler runs island claim mode after daily gift has refreshed the shared session', () => {
+    const daily = script.indexOf('Invoke-AutomationStep -Name "UMA Daily Gift"');
+    const island = script.indexOf('Invoke-AutomationStep -Name "UMA Island"');
+    assert.ok(daily >= 0 && island > daily);
+    assert.match(script, /-ScriptPath\s+"src\/islandAutomation\.js"\s+-Arguments\s+@\("--claim"\)/);
+});
+
 test('scheduler accumulates automation exit codes before deciding final failure', () => {
     assert.match(script, /\$FailedSteps\s*=\s*@\(\)/);
     assert.match(script, /\$FailedSteps\s*\+=\s*\$Result/);

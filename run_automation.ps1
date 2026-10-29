@@ -305,7 +305,7 @@ function Register-SchedulerTaskFromUi {
     }
     $Principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel $RunLevel
 
-    Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Settings $Settings -Principal $Principal -Description "Runs UMA daily gift and umamatch automation through run_automation.ps1." -Force | Out-Null
+    Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Settings $Settings -Principal $Principal -Description "Runs UMA daily gift and island automation through run_automation.ps1." -Force | Out-Null
     Show-UiMessage -Title "Scheduled task registered" -Message "Windows Task Scheduler task has been registered:`n$TaskName"
 }
 
@@ -427,6 +427,11 @@ try {
 
     # UMA Match 已於 UMAMATCH_SUNSET_AT (2026-07-06) 結束，每日排程不再啟動該步驟。
     # 若未來重新開放，可以 npm run umamatch:dry-run / umamatch:claim 手動執行。
+
+    $Result = Invoke-AutomationStep -Name "UMA Island" -ScriptPath "src/islandAutomation.js" -Arguments @("--claim")
+    if ($Result.ExitCode -ne 0) {
+        $FailedSteps += $Result
+    }
 
     if ($FailedSteps.Count -gt 0) {
         $FailedNames = ($FailedSteps | ForEach-Object { "$($_.Name) (exit $($_.ExitCode))" }) -join ", "
