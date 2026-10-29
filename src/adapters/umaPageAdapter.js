@@ -5,8 +5,13 @@ const {
     parseLotteryResult
 } = require('../domain/lottery');
 
-// 抽獎確認視窗最多等這麼久。逾時視為「這次沒有確認視窗」，而不是錯誤。
+// 單輪等待抽獎確認視窗的上限。逾時不是錯誤，只代表這一刻還沒有視窗。
 const CONFIRM_PROMPT_TIMEOUT_MS = 5000;
+
+// 第一輪沒看到視窗時的重試次數與每輪等待。慢出現的視窗若被當成「單擊即開獎」，
+// 抽獎其實沒完成卻會被記成 Success，所以總共約等 15 秒才下這個結論。
+const CONFIRM_PROMPT_RECHECK_ROUNDS = 5;
+const CONFIRM_PROMPT_RECHECK_TIMEOUT_MS = 2000;
 
 function isTimeoutError(error) {
     if (!error) return false;
@@ -267,14 +272,25 @@ class UmaPageAdapter {
     }
 
     async confirmLotteryPromptIfVisible() {
+        let attempt = await this.attemptLotteryConfirm(CONFIRM_PROMPT_TIMEOUT_MS);
+
+        // 第一輪沒看到確認視窗時不立刻當成單擊即開獎，再重試幾輪等視窗出現。
+        for (let round = 0; !attempt.promptDetected && round < CONFIRM_PROMPT_RECHECK_ROUNDS; round++) {
+            attempt = await this.attemptLotteryConfirm(CONFIRM_PROMPT_RECHECK_TIMEOUT_MS);
+        }
+
+        return attempt;
+    }
+
+    async attemptLotteryConfirm(timeout) {
         try {
             const confirmImage = this.page.locator('.popup-fixed img.btns1').first();
-            await confirmImage.waitFor({ state: 'visible', timeout: CONFIRM_PROMPT_TIMEOUT_MS });
+            await confirmImage.waitFor({ state: 'visible', timeout });
             await confirmImage.click({ timeout: 5000 });
             await this.page.waitForTimeout(1000);
             return { confirmed: true, promptDetected: true };
         } catch (error) {
-            // 逾時代表這次抽獎沒有跳出確認視窗（單擊即開獎），屬於正常情況。
+            // 逾時只代表這一輪還沒有確認視窗，是否重試由呼叫端決定。
             if (!isTimeoutError(error)) {
                 this.logger.warn('Lottery confirmation image click failed: ' + error.message);
             }
@@ -343,7 +359,7 @@ class UmaPageAdapter {
             return { confirmed: false, promptDetected: true };
         }
 
-        // 完全沒有確認視窗，代表這次抽獎單擊即完成，不需要額外確認。
+        // 這一輪沒有確認視窗。是否真的單擊即開獎，由呼叫端重試後才確定。
         return { confirmed: false, promptDetected: false };
     }
 

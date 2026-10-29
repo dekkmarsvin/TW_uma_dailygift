@@ -5,10 +5,11 @@ const UmaPageAdapter = require('../src/adapters/umaPageAdapter');
 
 function createStubPage({
     confirmImageVisible = false,
+    confirmImageVisibleAfterRounds = Infinity,
     domDialogFound = false,
     domConfirmFound = false
 } = {}) {
-    const calls = { mouseClicks: [], imageClicks: 0, waits: [] };
+    const calls = { mouseClicks: [], imageClicks: 0, waits: [], confirmAttempts: 0 };
 
     return {
         calls,
@@ -17,7 +18,8 @@ function createStubPage({
                 first() {
                     return {
                         async waitFor() {
-                            if (confirmImageVisible) return;
+                            calls.confirmAttempts += 1;
+                            if (confirmImageVisible || calls.confirmAttempts > confirmImageVisibleAfterRounds) return;
                             const error = new Error('Timeout 5000ms exceeded.');
                             error.name = 'TimeoutError';
                             throw error;
@@ -81,7 +83,19 @@ test('confirmLotteryPromptIfVisible stays quiet when no confirmation prompt appe
     assert.equal(result.confirmed, false);
     assert.equal(result.promptDetected, false, 'a one-click draw has no prompt to detect');
     assert.equal(page.calls.imageClicks, 0);
+    assert.equal(page.calls.confirmAttempts, 6, 'must re-check before concluding there was no prompt');
     assert.deepEqual(logger.messages, [], 'a missing prompt is normal and must not warn');
+});
+
+test('confirmLotteryPromptIfVisible confirms a dialog that appears after the first wait', async () => {
+    const page = createStubPage({ confirmImageVisibleAfterRounds: 2 });
+    const logger = createStubLogger();
+
+    const result = await new UmaPageAdapter(page, logger).confirmLotteryPromptIfVisible();
+
+    assert.deepEqual(result, { confirmed: true, promptDetected: true }, 'a late dialog must not be reported as a one-click draw');
+    assert.equal(page.calls.imageClicks, 1);
+    assert.deepEqual(page.calls.mouseClicks, []);
 });
 
 test('confirmLotteryPromptIfVisible uses the explicit confirm image when it is present', async () => {
