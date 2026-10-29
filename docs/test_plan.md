@@ -52,6 +52,11 @@ Run with `npm test`.
   - Reads no-win text.
   - Reads winning result patterns.
   - Ignores check-in reward text.
+- Lottery confirmation (`test/lotteryConfirm.test.js`):
+  - Clicks the explicit confirm image when the dialog is already open.
+  - Accepts a confirm control found in the dialog DOM and never falls back to a blind coordinate click.
+  - Re-checks for a dialog that appears after the first wait, so a slow prompt is not reported as a completed one-click draw.
+  - Reports a silent one-click draw only after the bounded re-checks find no dialog at all.
 - Scheduler wrapper (`test/schedulerScript.test.js`):
   - Runs dailygift followed by island automation and no longer spawns the sunset umamatch step.
   - Accumulates step exit codes before deciding the final failure state.
